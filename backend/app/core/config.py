@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     cors_origins: str = "http://localhost:5173"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    llm_timeout_seconds: float = 60.0
 
     @property
     def cors_origin_list(self) -> list[str]:

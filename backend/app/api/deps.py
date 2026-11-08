@@ -4,6 +4,8 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent import llm_client
+from app.agent.llm_client import ChatFn
 from app.core.database import get_session
 from app.core.errors import AuthenticationError
 from app.core.security import decode_access_token
@@ -28,3 +30,7 @@ async def get_current_user(
     if user is None:
         raise AuthenticationError("Token inválido o expirado.")
     return user
+
+
+def get_chat_fn() -> ChatFn:
+    return llm_client.chat
