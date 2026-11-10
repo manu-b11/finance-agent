@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
     invoice_max_bytes: int = 10 * 1024 * 1024
     invoice_max_pdf_pages: int = 5
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:admin@example.com"
+    scheduler_enabled: bool = True
+    reminder_poll_seconds: int = 30
+    reminder_max_attempts: int = 5
+    reminder_retry_minutes: int = 5
 
     @property
     def cors_origin_list(self) -> list[str]:
