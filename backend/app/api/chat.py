@@ -3,7 +3,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,8 +12,10 @@ from app.agent.llm_client import ChatFn
 from app.api.deps import get_chat_fn, get_current_user
 from app.core.database import get_session
 from app.core.errors import AppError
+from app.models.chat_message import ChatMessage
 from app.models.user import User
-from app.schemas.chat import ChatRequest
+from app.schemas.chat import ChatMessageRead, ChatRequest
+from app.services import chat_message as chat_message_service
 
 logger = logging.getLogger(__name__)
 
@@ -54,3 +56,12 @@ async def chat(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/history", response_model=list[ChatMessageRead])
+async def history(
+    limit: int = Query(default=chat_message_service.HISTORY_PAGE_LIMIT, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[ChatMessage]:
+    return await chat_message_service.list_history(session, current_user.id, limit)

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.chat_message import ChatMessage
 
 HISTORY_LIMIT = 20
+HISTORY_PAGE_LIMIT = 50
 
 
 async def get_recent_messages(
@@ -30,3 +31,16 @@ async def add_exchange(
     await session.flush()
     session.add(ChatMessage(user_id=user_id, role="assistant", content=assistant_text))
     await session.commit()
+
+
+async def list_history(
+    session: AsyncSession, user_id: uuid.UUID, limit: int = HISTORY_PAGE_LIMIT
+) -> list[ChatMessage]:
+    """Últimos `limit` mensajes del usuario para mostrarlos al recargar, en orden cronológico."""
+    result = await session.execute(
+        select(ChatMessage)
+        .where(ChatMessage.user_id == user_id)
+        .order_by(ChatMessage.id.desc())
+        .limit(limit)
+    )
+    return list(reversed(result.scalars().all()))

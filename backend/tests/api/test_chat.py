@@ -110,3 +110,37 @@ async def test_chat_reports_unexpected_errors_without_leaking_details(client):
     response = await client.post("/chat", json={"message": "hola"}, headers=headers)
     assert "secreto interno" not in response.text
     assert parse_sse(response.text)[0][0] == "error"
+
+
+async def test_history_requires_authentication(client):
+    response = await client.get("/chat/history")
+    assert response.status_code == 401
+
+
+async def test_history_returns_saved_messages(client):
+    headers = await auth_headers(client)
+    use_chat(FakeChat(text_response("Hola, ¿en qué te ayudo?")))
+    await client.post("/chat", json={"message": "hola"}, headers=headers)
+    response = await client.get("/chat/history", headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert [(m["role"], m["content"]) for m in body] == [
+        ("user", "hola"),
+        ("assistant", "Hola, ¿en qué te ayudo?"),
+    ]
+
+
+async def test_history_is_empty_for_new_user_and_isolated(client):
+    ana = await auth_headers(client)
+    use_chat(FakeChat(text_response("Hola ana")))
+    await client.post("/chat", json={"message": "hola"}, headers=ana)
+    beto = await auth_headers(client, {"email": "beto@example.com", "password": "clave-segura-1"})
+    response = await client.get("/chat/history", headers=beto)
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_history_rejects_invalid_limit(client):
+    headers = await auth_headers(client)
+    response = await client.get("/chat/history?limit=0", headers=headers)
+    assert response.status_code == 422
