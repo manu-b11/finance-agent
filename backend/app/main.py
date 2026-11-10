@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth as auth_router
 from app.api import chat as chat_router
+from app.api import dashboard as dashboard_router
 from app.api import invoices as invoices_router
 from app.api import push as push_router
 from app.api import reports as reports_router
@@ -47,6 +48,7 @@ app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(invoices_router.router)
 app.include_router(reports_router.router)
+app.include_router(dashboard_router.router)
 app.include_router(push_router.router)
 
 
