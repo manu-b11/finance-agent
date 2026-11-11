@@ -16,4 +16,6 @@ export function uploadInvoice(file) {
 
 export const getInvoice = (id) => request(`/invoices/${id}`)
 
+export const listInvoices = () => request('/invoices')
+
 // No existe endpoint REST para confirmar: la confirmación pasa por el chat (tool confirm_invoice).

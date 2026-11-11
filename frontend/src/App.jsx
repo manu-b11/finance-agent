@@ -3,6 +3,13 @@ import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Home from './pages/Home.jsx'
+import Invoices from './pages/Invoices.jsx'
+
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="boot" />
+  return user ? children : <Navigate to="/" replace />
+}
 
 function PublicRoute({ children }) {
   const { user, loading } = useAuth()
@@ -18,6 +25,7 @@ export default function App() {
           {/* El chat es público: un invitado puede verlo y probarlo.
               Tras unos mensajes de prueba se le pide crear cuenta o iniciar sesión. */}
           <Route path="/" element={<Home />} />
+          <Route path="/facturas" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />

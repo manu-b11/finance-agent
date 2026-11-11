@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Icon from '../Icon.jsx'
 import { displayName, initial } from '../../lib/format.js'
 
 const NAV = [
-  { icon: 'dash', label: 'Dashboard' },
-  { icon: 'receipt', label: 'Facturas' },
+  { icon: 'receipt', label: 'Facturas', to: '/facturas' },
   { icon: 'report', label: 'Informes' },
   { icon: 'bell', label: 'Recordatorios' },
 ]
@@ -17,6 +17,7 @@ export default function Sidebar({
   user,
   history = [],
   activeId,
+  current = 'chat',
   open,
   onClose,
   onCollapse,
@@ -25,6 +26,7 @@ export default function Sidebar({
   onLogout,
   onAuth,
 }) {
+  const navigate = useNavigate()
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [userMenu, setUserMenu] = useState(false)
@@ -97,14 +99,28 @@ export default function Sidebar({
         )}
 
         <nav className="nav">
-          <button className="nav-item active" onClick={onNewChat}>
+          <button className={`nav-item${current === 'chat' ? ' active' : ''}`} onClick={onNewChat}>
             <Icon name="compose" />Nuevo chat
           </button>
-          {NAV.map((item) => (
-            <button key={item.label} className="nav-item" disabled title="Próximamente">
-              <Icon name={item.icon} />{item.label}
-            </button>
-          ))}
+          {NAV.map((item) =>
+            item.to ? (
+              <button
+                key={item.label}
+                className={`nav-item${current === item.to ? ' active' : ''}`}
+                onClick={() => {
+                  if (!user) return onAuth?.('login')
+                  onClose?.()
+                  navigate(item.to)
+                }}
+              >
+                <Icon name={item.icon} />{item.label}
+              </button>
+            ) : (
+              <button key={item.label} className="nav-item" disabled title="Próximamente">
+                <Icon name={item.icon} />{item.label}
+              </button>
+            ),
+          )}
         </nav>
 
         {!user && (

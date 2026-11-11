@@ -33,6 +33,14 @@ async def upload_invoice(
     )
 
 
+@router.get("", response_model=list[InvoiceRead])
+async def list_invoices(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[InvoiceRead]:
+    return await invoice_service.list_invoices(session, current_user.id)
+
+
 @router.get("/{invoice_id}", response_model=InvoiceRead)
 async def get_invoice(
     invoice_id: uuid.UUID,

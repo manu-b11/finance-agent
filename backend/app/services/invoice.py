@@ -39,6 +39,7 @@ FIELD_LABELS = {
     "category": "categoría",
 }
 DRAFT_LIST_LIMIT = 10
+INVOICE_LIST_LIMIT = 50
 
 InvoiceExtractor = Callable[[list[ImagePart]], Awaitable[InvoiceDraft]]
 
@@ -186,6 +187,16 @@ async def get_invoice(
     session: AsyncSession, user_id: uuid.UUID, invoice_id: uuid.UUID
 ) -> InvoiceRead:
     return await _read(session, await _get_owned(session, user_id, invoice_id))
+
+
+async def list_invoices(session: AsyncSession, user_id: uuid.UUID) -> list[InvoiceRead]:
+    result = await session.execute(
+        select(Invoice)
+        .where(Invoice.user_id == user_id)
+        .order_by(Invoice.created_at.desc())
+        .limit(INVOICE_LIST_LIMIT)
+    )
+    return [await _read(session, invoice) for invoice in result.scalars().all()]
 
 
 async def list_drafts(session: AsyncSession, user_id: uuid.UUID) -> list[InvoiceRead]:
