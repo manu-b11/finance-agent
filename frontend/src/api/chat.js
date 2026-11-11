@@ -1,15 +1,17 @@
 import { API_URL, authHeaders, request, safeFetch, toApiError } from './client.js'
 
 /*
-  Contrato real de POST /chat  (backend: app/api/chat.py, body: { message } con 1–2000 caracteres)
+  Contrato real de POST /chat  (backend: app/api/chat.py, body: { message, conversation_id? })
   Responde SSE; cada evento llega como  "event: <tipo>\ndata: <json>\n\n":
 
-    tool_call   { name }            el agente va a ejecutar una herramienta
-    message     { text }            respuesta COMPLETA del agente (no llega por fragmentos)
-    error       { code, message }
-    done        {}
+    conversation { id, title }      se creó la conversación al enviar el primer mensaje
+    tool_call    { name }           el agente va a ejecutar una herramienta
+    tool_result  { name, result }   resultado de esa herramienta (result.error si falló)
+    message      { text }           respuesta COMPLETA del agente (no llega por fragmentos)
+    error        { code, message }
+    done         {}
 
-  El historial de la conversación lo guarda el servidor por usuario (tabla chat_message).
+  El historial se guarda por conversación (tabla chat_message + conversations).
 */
 
 function parseBlock(block) {
@@ -30,15 +32,7 @@ function parseBlock(block) {
   return { event, data }
 }
 
-export async function* streamChat(message, { signal } = {}) {
-  const res = await safeFetch(`${API_URL}/chat`, {
-    method: 'POST',
-    signal,
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...authHeaders() },
-    body: JSON.stringify({ message }),
-  })
-  if (!res.ok) throw await toApiError(res)
-
+async function* readSse(res) {
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
@@ -59,5 +53,55 @@ export async function* streamChat(message, { signal } = {}) {
   }
 }
 
-// GET /chat/history?limit=50 → [{ id, role: 'user'|'assistant', content, created_at }] en orden cronológico
+export async function* streamChat(message, { conversationId, signal } = {}) {
+  const res = await safeFetch(`${API_URL}/chat`, {
+    method: 'POST',
+    signal,
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...authHeaders() },
+    body: JSON.stringify(
+      conversationId ? { message, conversation_id: conversationId } : { message },
+    ),
+  })
+  if (!res.ok) throw await toApiError(res)
+  yield* readSse(res)
+}
+
+// POST /chat/demo → vista previa para invitados (IA real, sin herramientas ni datos guardados).
+export async function* streamDemoChat(message, { history = [], timezone, signal } = {}) {
+  const res = await safeFetch(`${API_URL}/chat/demo`, {
+    method: 'POST',
+    signal,
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify({
+      message,
+      history,
+      ...(timezone ? { timezone } : {}),
+    }),
+  })
+  if (!res.ok) throw await toApiError(res)
+  yield* readSse(res)
+}
+
+// GET /chat/conversations?limit=50 → [{ id, title, created_at, updated_at }] (más reciente primero)
+export const getConversations = (limit = 50) =>
+  request(`/chat/conversations?limit=${limit}`)
+
+// POST /chat/conversations → conversación vacía; si se envía title, se usa como título inicial
+export const createConversation = (title) =>
+  request('/chat/conversations', { method: 'POST', body: title ? { title } : undefined })
+
+// GET /chat/conversations/{id}/messages?limit=50 → [{ id, role, content, created_at }]
+export const getConversationMessages = (conversationId, limit = 50) =>
+  request(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages?limit=${limit}`,
+  )
+
+// POST /chat/conversations/{id}/messages → guarda un intercambio ya resuelto (sin llamar a la IA)
+export const addExchange = (conversationId, { userText, assistantText }) =>
+  request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    method: 'POST',
+    body: { user_text: userText, assistant_text: assistantText },
+  })
+
+// GET /chat/history?limit=50 → historial global reciente (compatibilidad)
 export const getHistory = (limit = 50) => request(`/chat/history?limit=${limit}`)

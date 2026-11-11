@@ -1,5 +1,6 @@
 from app.models.budget import Budget
 from app.models.chat_message import ChatMessage
+from app.models.conversation import Conversation
 from app.models.invoice import Invoice, InvoiceItem
 from app.models.push_subscription import PushSubscription
 from app.models.reminder import Reminder
@@ -10,6 +11,7 @@ from app.models.user import User
 __all__ = [
     "Budget",
     "ChatMessage",
+    "Conversation",
     "Invoice",
     "InvoiceItem",
     "PushSubscription",

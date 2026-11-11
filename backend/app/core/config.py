@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     cors_origins: str = "http://localhost:5173"
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
     llm_timeout_seconds: float = 60.0
     invoice_max_bytes: int = 10 * 1024 * 1024
     invoice_max_pdf_pages: int = 5

@@ -59,6 +59,7 @@ async def run(
         for call in response.tool_calls:
             yield AgentEvent("tool_call", {"name": call.name})
             result = await _run_tool(session, user_id, call)
+            yield AgentEvent("tool_result", {"name": call.name, "result": result})
             conversation.append(
                 Message(
                     role="tool",

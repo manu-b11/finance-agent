@@ -61,6 +61,12 @@ class AIUnavailableError(AppError):
     message = "El servicio de IA no está disponible en este momento."
 
 
+class RateLimitError(AppError):
+    status_code = 429
+    code = "rate_limited"
+    message = "Probaste Finly varias veces. Crea una cuenta para seguir conversando."
+
+
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,

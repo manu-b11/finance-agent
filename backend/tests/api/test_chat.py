@@ -70,11 +70,20 @@ async def test_chat_streams_events_and_executes_tools(client, session):
     response = await client.post("/chat", json={"message": "Gasté 25000 en almuerzo"}, headers=headers)
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
-    assert parse_sse(response.text) == [
-        ("tool_call", {"name": "add_transaction"}),
-        ("message", {"text": "Registré tu almuerzo por 25.000."}),
-        ("done", {}),
+    events = parse_sse(response.text)
+    assert [name for name, _ in events] == [
+        "tool_call",
+        "tool_result",
+        "conversation",
+        "message",
+        "done",
     ]
+    assert events[0][1] == {"name": "add_transaction"}
+    assert events[1][1]["name"] == "add_transaction"
+    assert events[1][1]["result"]["concept"] == "Almuerzo"
+    assert events[2][1]["title"] == "Gasté 25000 en almuerzo"
+    assert events[3][1] == {"text": "Registré tu almuerzo por 25.000."}
+    assert events[4][1] == {}
     user_id = (await client.get("/auth/me", headers=headers)).json()["id"]
     import uuid
 
@@ -144,3 +153,74 @@ async def test_history_rejects_invalid_limit(client):
     headers = await auth_headers(client)
     response = await client.get("/chat/history?limit=0", headers=headers)
     assert response.status_code == 422
+
+
+async def test_chat_creates_conversation_and_lists_it_with_title(client):
+    headers = await auth_headers(client)
+    use_chat(FakeChat(text_response("Hola, ¿en qué te ayudo?")))
+    response = await client.post("/chat", json={"message": "Hola"}, headers=headers)
+    events = parse_sse(response.text)
+    conversation_event = next(data for name, data in events if name == "conversation")
+    assert conversation_event["title"] == "Hola"
+
+    response = await client.get("/chat/conversations", headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == conversation_event["id"]
+    assert body[0]["title"] == "Hola"
+
+
+async def test_conversation_messages_are_separated_by_conversation(client):
+    headers = await auth_headers(client)
+    first = await client.post("/chat/conversations", headers=headers)
+    second = await client.post("/chat/conversations", headers=headers)
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    use_chat(FakeChat(text_response("Respuesta uno")))
+    await client.post(
+        "/chat",
+        json={"message": "Mensaje uno", "conversation_id": first.json()["id"]},
+        headers=headers,
+    )
+    use_chat(FakeChat(text_response("Respuesta dos")))
+    await client.post(
+        "/chat",
+        json={"message": "Mensaje dos", "conversation_id": second.json()["id"]},
+        headers=headers,
+    )
+
+    one = await client.get(
+        f"/chat/conversations/{first.json()['id']}/messages", headers=headers
+    )
+    two = await client.get(
+        f"/chat/conversations/{second.json()['id']}/messages", headers=headers
+    )
+    assert [m["content"] for m in one.json()] == ["Mensaje uno", "Respuesta uno"]
+    assert [m["content"] for m in two.json()] == ["Mensaje dos", "Respuesta dos"]
+
+    conversations = (await client.get("/chat/conversations", headers=headers)).json()
+    assert {c["title"] for c in conversations} == {"Mensaje uno", "Mensaje dos"}
+
+
+async def test_conversations_are_isolated_between_users(client):
+    ana = await auth_headers(client)
+    beto = await auth_headers(
+        client, {"email": "beto@example.com", "password": "clave-segura-1"}
+    )
+    created = await client.post("/chat/conversations", headers=ana)
+    conversation_id = created.json()["id"]
+
+    assert (await client.get("/chat/conversations", headers=beto)).json() == []
+    response = await client.get(
+        f"/chat/conversations/{conversation_id}/messages", headers=beto
+    )
+    assert response.status_code == 404
+    response = await client.post(
+        "/chat",
+        json={"message": "Hola", "conversation_id": conversation_id},
+        headers=beto,
+    )
+    assert response.status_code == 404
+

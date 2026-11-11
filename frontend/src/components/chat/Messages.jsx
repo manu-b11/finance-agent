@@ -1,16 +1,9 @@
 import { useEffect, useRef } from 'react'
-import QuickReplies from './QuickReplies.jsx'
 import InvoiceDraftCard from '../invoice/InvoiceDraftCard.jsx'
 import { BalanceCard } from '../dashboard/SummaryCards.jsx'
-
-// Texto plano con **negrita** (nunca HTML del modelo, para evitar inyección).
-function RichText({ text }) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') && part.length > 4
-      ? <b key={i}>{part.slice(2, -2)}</b>
-      : part,
-  )
-}
+import TransactionCard from './TransactionCard.jsx'
+import ReportCard from './ReportCard.jsx'
+import RichText from './RichText.jsx'
 
 function Typing({ label }) {
   return (
@@ -38,12 +31,16 @@ function AgentCard({ card, busy, onSend }) {
       return <InvoiceDraftCard draft={card.data} busy={busy} onAction={onSend} />
     case 'balance':
       return <BalanceCard data={card.data} />
+    case 'transaction':
+      return <TransactionCard action={card.data.action} transaction={card.data.transaction} />
+    case 'report':
+      return <ReportCard report={card.data} />
     default:
       return null
   }
 }
 
-function AgentMessage({ message, isLast, busy, onSend }) {
+function AgentMessage({ message, busy, onSend }) {
   const typing = message.status === 'typing'
   const showBubble = typing || message.text || message.error
   return (
@@ -59,7 +56,6 @@ function AgentMessage({ message, isLast, busy, onSend }) {
         {message.cards.map((card, i) => (
           <AgentCard key={i} card={card} busy={busy} onSend={onSend} />
         ))}
-        <QuickReplies items={message.quickReplies} onPick={onSend} disabled={busy || !isLast} />
       </div>
     </div>
   )
@@ -74,14 +70,13 @@ export default function Messages({ messages, busy, onSend }) {
 
   return (
     <section className="chat" aria-live="polite">
-      {messages.map((m, i) =>
+      {messages.map((m) =>
         m.role === 'user' ? (
           <UserMessage key={m.id} message={m} />
         ) : (
           <AgentMessage
             key={m.id}
             message={m}
-            isLast={i === messages.length - 1}
             busy={busy}
             onSend={onSend}
           />

@@ -19,6 +19,15 @@ export function formatDate(value) {
   return new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
 }
 
+// "2026-11" → "noviembre de 2026"
+export function formatMonth(value) {
+  const m = /^(\d{4})-(\d{2})$/.exec(value ?? '')
+  if (!m) return value ?? ''
+  return new Intl.DateTimeFormat('es-CO', { month: 'long', year: 'numeric' }).format(
+    new Date(+m[1], +m[2] - 1, 1),
+  )
+}
+
 // Valores de ExpenseCategory en el backend (sin tildes) → texto para el usuario.
 const CATEGORY_LABELS = {
   alimentacion: 'Alimentación',
@@ -35,7 +44,7 @@ export const categoryLabel = (c) => CATEGORY_LABELS[c] ?? c ?? ''
 
 const capitalize = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 
-// UserRead hoy solo trae email (sin nombre). Si el backend agrega `name`, se usa automáticamente.
+// UserRead incluye name. Se mantiene el correo como respaldo para datos antiguos.
 export function displayName(user) {
   if (user?.name) return user.name
   if (user?.full_name) return user.full_name

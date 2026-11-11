@@ -18,8 +18,11 @@ function greetingFor(name, date = new Date()) {
 }
 
 // children = el <Composer/>, que Home coloca aquí mientras no hay conversación.
-export default function Welcome({ name, onFill, onSend, onUpload, children }) {
+export default function Welcome({ name, guest, guestLeft = 0, onFill, onSend, onUpload, children }) {
   const [line1, line2] = greetingFor(name)
+  const subtitle = guest
+    ? 'Así se siente Finly. Escribe algo para probarlo.'
+    : line2
 
   const pick = (s) => {
     if (s.fill) onFill(s.fill)
@@ -31,9 +34,15 @@ export default function Welcome({ name, onFill, onSend, onUpload, children }) {
     <section className="welcome">
       <div className="orb-wrap" aria-hidden="true"><div className="orb" /></div>
 
-      <h1 className="greeting">{line1}<br />{line2}</h1>
+      <h1 className="greeting">{line1}<br />{subtitle}</h1>
 
       <div className="composer-slot">{children}</div>
+
+      {guest && guestLeft > 0 && (
+        <p className="guest-note">
+          {guestLeft === 1 ? 'Te queda 1 mensaje de prueba' : `Te quedan ${guestLeft} mensajes de prueba`}. Luego creas tu cuenta y seguimos.
+        </p>
+      )}
 
       <div className="suggestions">
         {SUGGESTIONS.map((s) => (

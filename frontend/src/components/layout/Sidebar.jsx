@@ -11,9 +11,20 @@ const NAV = [
 
 /*
   history: [{ label: 'Hoy', items: [{ id, title }] }]
-  Por ahora llega vacío: el README no define un endpoint de historial de conversaciones.
+  Sin usuario (invitado) se muestra un aviso para iniciar sesión.
 */
-export default function Sidebar({ user, history = [], open, onClose, onCollapse, onNewChat, onSelectChat, onLogout }) {
+export default function Sidebar({
+  user,
+  history = [],
+  activeId,
+  open,
+  onClose,
+  onCollapse,
+  onNewChat,
+  onSelectChat,
+  onLogout,
+  onAuth,
+}) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [userMenu, setUserMenu] = useState(false)
@@ -21,6 +32,7 @@ export default function Sidebar({ user, history = [], open, onClose, onCollapse,
   const userRef = useRef(null)
 
   useEffect(() => {
+    if (!user) return
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
@@ -29,7 +41,7 @@ export default function Sidebar({ user, history = [], open, onClose, onCollapse,
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  }, [user])
 
   useEffect(() => {
     if (searchOpen) searchRef.current?.focus()
@@ -58,27 +70,31 @@ export default function Sidebar({ user, history = [], open, onClose, onCollapse,
             <span className="wordmark">Finly</span>
           </div>
           <div className="brand-actions">
-            <button className="side-icon" onClick={() => setSearchOpen(true)} aria-label="Buscar chats">
-              <Icon name="search" />
-            </button>
+            {user && (
+              <button className="side-icon" onClick={() => setSearchOpen(true)} aria-label="Buscar chats">
+                <Icon name="search" />
+              </button>
+            )}
             <button className="side-icon" onClick={onCollapse} aria-label="Cerrar barra lateral">
               <Icon name="panel" />
             </button>
           </div>
         </div>
 
-        <label className={`search${searchOpen ? ' open' : ''}`}>
-          <Icon name="search" />
-          <input
-            ref={searchRef}
-            type="search"
-            placeholder="Buscar chats"
-            aria-label="Buscar chats"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <span className="kbd">⌘</span>
-        </label>
+        {user && (
+          <label className={`search${searchOpen ? ' open' : ''}`}>
+            <Icon name="search" />
+            <input
+              ref={searchRef}
+              type="search"
+              placeholder="Buscar chats"
+              aria-label="Buscar chats"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <span className="kbd">⌘</span>
+          </label>
+        )}
 
         <nav className="nav">
           <button className="nav-item active" onClick={onNewChat}>
@@ -91,31 +107,54 @@ export default function Sidebar({ user, history = [], open, onClose, onCollapse,
           ))}
         </nav>
 
-        <div className="history">
-          {groups.map((g) => (
-            <section key={g.label}>
-              <h4>{g.label}</h4>
-              {g.items.map((item) => (
-                <button key={item.id} onClick={() => onSelectChat?.(item)}>{item.title}</button>
-              ))}
-            </section>
-          ))}
-        </div>
-
-        <div className="user-wrap" ref={userRef}>
-          {userMenu && (
-            <div className="user-pop">
-              <button onClick={onLogout}><Icon name="out" />Cerrar sesión</button>
-            </div>
-          )}
-          <button className="user" aria-label="Menú de usuario" onClick={() => setUserMenu((v) => !v)}>
-            <div className="avatar">{initial(user)}</div>
-            <div className="user-info">
-              <b>{displayName(user)}</b>
-              <span>{user?.plan ?? 'Free'}</span>
-            </div>
+        {!user && (
+          <button className="guest-hint" onClick={() => onAuth?.('login')}>
+            <Icon name="info" />
+            <span><span className="guest-hint-link">Inicia sesión</span> para que Finly recuerde tus finanzas</span>
           </button>
-        </div>
+        )}
+
+        {user && (
+          <div className="history">
+            {groups.map((g) => (
+              <section key={g.label}>
+                <h4>{g.label}</h4>
+                {g.items.map((item) => (
+                  <button
+                    key={item.id}
+                    className={activeId === item.id ? 'active' : undefined}
+                    aria-current={activeId === item.id ? 'page' : undefined}
+                    onClick={() => onSelectChat?.(item)}
+                  >
+                    {item.title}
+                  </button>
+                ))}
+              </section>
+            ))}
+          </div>
+        )}
+
+        {user ? (
+          <div className="user-wrap" ref={userRef}>
+            {userMenu && (
+              <div className="user-pop">
+                <button onClick={onLogout}><Icon name="out" />Cerrar sesión</button>
+              </div>
+            )}
+            <button className="user" aria-label="Menú de usuario" onClick={() => setUserMenu((v) => !v)}>
+              <div className="avatar">{initial(user)}</div>
+              <div className="user-info">
+                <b>{displayName(user)}</b>
+                <span>{user?.plan ?? 'Free'}</span>
+              </div>
+            </button>
+          </div>
+        ) : (
+          <div className="guest-user">
+            <button className="btn" onClick={() => onAuth?.('login')}>Iniciar sesión</button>
+            <button className="btn primary" onClick={() => onAuth?.('register')}>Crear cuenta</button>
+          </div>
+        )}
       </aside>
       <div className="overlay" onClick={onClose} />
     </>

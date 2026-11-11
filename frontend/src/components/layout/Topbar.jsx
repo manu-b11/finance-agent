@@ -1,6 +1,6 @@
 import Icon from '../Icon.jsx'
 
-export default function Topbar({ onMenu }) {
+export default function Topbar({ onMenu, user, onAuth }) {
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -8,9 +8,17 @@ export default function Topbar({ onMenu }) {
           <Icon name="menu" />
         </button>
       </div>
-      <button className="icon-btn" aria-label="Más opciones">
-        <Icon name="dots" />
-      </button>
+
+      {user ? (
+        <button className="icon-btn" aria-label="Más opciones">
+          <Icon name="dots" />
+        </button>
+      ) : (
+        <div className="topbar-auth">
+          <button className="btn ghost" onClick={() => onAuth?.('login')}>Iniciar sesión</button>
+          <button className="btn primary" onClick={() => onAuth?.('register')}>Crear cuenta</button>
+        </div>
+      )}
     </header>
   )
 }

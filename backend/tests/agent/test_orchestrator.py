@@ -39,9 +39,12 @@ async def test_runs_tool_and_returns_final_message(session):
         text_response("Registré tu almuerzo."),
     )
     events = await collect(chat, session, user.id)
-    assert [event.type for event in events] == ["tool_call", "message"]
+    assert [event.type for event in events] == ["tool_call", "tool_result", "message"]
     assert events[0].data == {"name": "add_transaction"}
-    assert events[1].data == {"text": "Registré tu almuerzo."}
+    assert events[1].data["name"] == "add_transaction"
+    assert events[1].data["result"]["concept"] == "Almuerzo"
+    assert events[1].data["result"]["amount"] == "25000.00"
+    assert events[2].data == {"text": "Registré tu almuerzo."}
     listed = await tools.list_transactions(session, user.id, {})
     assert listed["count"] == 1
     assert listed["transactions"][0]["concept"] == "Almuerzo"
@@ -119,9 +122,10 @@ async def test_domain_error_is_returned_to_model(session):
         ),
         text_response("No encontré ese movimiento."),
     )
-    await collect(chat, session, user.id)
+    events = await collect(chat, session, user.id)
     result = json.loads(chat.calls[1][0][-1].content)
     assert result == {"error": "not_found", "message": "No se encontró ese movimiento."}
+    assert events[1].data == {"name": "delete_transaction", "result": result}
 
 
 async def test_other_users_transaction_cannot_be_deleted_through_agent(session):
@@ -148,7 +152,17 @@ async def test_multiple_tool_calls_in_one_turn(session):
         text_response("Registré ambos gastos."),
     )
     events = await collect(chat, session, user.id)
-    assert [event.type for event in events] == ["tool_call", "tool_call", "message"]
+    assert [event.type for event in events] == [
+        "tool_call",
+        "tool_result",
+        "tool_call",
+        "tool_result",
+        "message",
+    ]
+    assert [event.data["result"]["concept"] for event in events if event.type == "tool_result"] == [
+        "Almuerzo",
+        "Cena",
+    ]
     assert (await tools.list_transactions(session, user.id, {}))["count"] == 2
     assert [m.role for m in chat.calls[1][0][-3:]] == ["assistant", "tool", "tool"]
 
@@ -314,9 +328,15 @@ async def test_agent_answers_with_category_data_and_report_link(session):
         text_response("Gastas más en alimentación. Tu informe está listo."),
     )
     events = await collect(chat, session, user_id, "¿En qué gasto más? Dame el informe de noviembre")
-    assert [e.type for e in events] == ["tool_call", "tool_call", "message"]
-    breakdown = json.loads(chat.calls[1][0][-2].content)
-    report = json.loads(chat.calls[1][0][-1].content)
+    assert [e.type for e in events] == [
+        "tool_call",
+        "tool_result",
+        "tool_call",
+        "tool_result",
+        "message",
+    ]
+    breakdown = events[1].data["result"]
+    report = events[3].data["result"]
     assert breakdown["top_category"] == "alimentacion"
     assert report["pdf_url"] == "/reports/monthly/2026-11/pdf"
     assert report["total_expenses"] == "30000.00"
