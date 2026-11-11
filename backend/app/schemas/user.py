@@ -1,36 +1,22 @@
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    EmailStr,
-    Field,
-    StringConstraints,
-    field_validator,
-    model_validator,
-)
-
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserCreate(BaseModel):
-    name: Name
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    name: str | None = Field(default=None, max_length=100)
     timezone: str = "America/Bogota"
 
-    @model_validator(mode="before")
+    @field_validator("name")
     @classmethod
-    def default_name_from_email(cls, data: Any) -> Any:
-        # Compatibilidad con clientes antiguos: sin name se usa la parte local del correo.
-        if isinstance(data, dict) and "name" not in data:
-            email = data.get("email")
-            if isinstance(email, str) and "@" in email:
-                return {**data, "name": email.split("@", 1)[0]}
-        return data
+    def clean_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
 
     @field_validator("timezone")
     @classmethod
@@ -51,8 +37,8 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    name: str
     email: EmailStr
+    name: str | None = None
     timezone: str
     created_at: datetime
 

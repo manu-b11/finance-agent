@@ -1,4 +1,4 @@
-"""add name to users
+"""add user name
 
 Revision ID: 0007
 Revises: 0006
@@ -16,10 +16,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("users", sa.Column("name", sa.String(length=255), nullable=True))
-    # Usuarios existentes: nombre visible derivado de la parte local del correo.
-    op.execute("UPDATE users SET name = split_part(email, '@', 1) WHERE name IS NULL")
-    op.alter_column("users", "name", nullable=False)
+    op.add_column("users", sa.Column("name", sa.String(length=100), nullable=True))
 
 
 def downgrade() -> None:

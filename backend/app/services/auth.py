@@ -27,8 +27,8 @@ async def register_user(session: AsyncSession, data: UserCreate) -> User:
     if await get_user_by_email(session, data.email) is not None:
         raise ConflictError("Ya existe una cuenta con ese correo.")
     user = User(
-        name=data.name,
         email=normalize_email(data.email),
+        name=data.name,
         password_hash=hash_password(data.password),
         timezone=data.timezone,
     )
