@@ -9,38 +9,43 @@
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
 ![Estado](https://img.shields.io/badge/estado-MVP%20en%20desarrollo-yellow)
 
-Finly es una aplicación web para gestionar finanzas personales mediante un agente de IA conversacional. En lugar de llenar formularios, el usuario escribe lo que necesita —“gasté 45.000 en almuerzo”, “¿cuánto me queda del presupuesto?”, “subí esta factura”— y el agente interpreta la petición, ejecuta herramientas sobre datos reales y responde.
 
-El proyecto es un **monolito modular** con backend FastAPI, PostgreSQL y un frontend React. La lógica financiera, las herramientas del agente y la persistencia viven en el backend; el frontend solo conversa con la API.
+Finly es una aplicación web que te ayuda a llevar tus finanzas personales conversando con un agente de IA. No hay formularios que llenar: escribes lo que necesitas, por ejemplo "gasté 45.000 en almuerzo", "¿cuánto me queda del presupuesto?" o "subí esta factura", y el agente lo interpreta, trabaja con tus datos reales y te responde.
 
-> Este documento es la fuente de verdad del proyecto. Toda IA o desarrollador debe leerlo antes de modificar código. Los códigos RF, RNF y RB hacen referencia al documento de requerimientos del MVP (versión 1.1).
+Está construido como un **monolito modular** con backend en FastAPI, base de datos PostgreSQL y frontend en React. La lógica financiera, las herramientas del agente y la persistencia viven en el backend; el frontend solo se comunica con la API.
+
+**Contenido:** [Qué puedes hacer](#qué-puedes-hacer-con-finly) · [Sin cuenta](#usar-finly-sin-cuenta) · [Cómo funciona](#cómo-funciona) · [Stack](#stack) · [Puesta en marcha](#puesta-en-marcha) · [Estructura](#estructura-del-proyecto) · [API](#api-principal) · [Estado](#estado-del-proyecto)
 
 ---
 
 ## ¿Qué puedes hacer con Finly?
 
-- **Registrar ingresos y gastos** con valor, concepto, fecha y categoría; consultarlos, corregirlos o eliminarlos.
-- **Consultar el balance** del mes y el estado del presupuesto por categoría.
-- **Crear metas de ahorro** y registrar aportes, con progreso y fecha límite opcional.
-- **Subir facturas** en PDF o imagen: Finly extrae comercio, fecha, ítems y total, los muestra para revisión y solo registra el gasto cuando el usuario confirma.
-- **Descargar informes mensuales** en PDF y consultar en qué categorías se gasta más.
-- **Programar recordatorios** (una vez, diarios, semanales, mensuales, quincenales o personalizados). El backend puede enviarlos como notificaciones push con VAPID.
-- **Retomar conversaciones** desde el historial del sidebar, con títulos generados a partir del primer mensaje.
-- **Probar el chat sin cuenta**: la portada es pública y el invitado tiene unos mensajes de demostración antes de registrarse.
+- **Registrar ingresos y gastos** con valor, concepto, fecha y categoría, y luego consultarlos, corregirlos o eliminarlos.
+- **Ver tu balance** del mes y cómo va tu presupuesto por categoría.
+- **Crear metas de ahorro** y registrar aportes, con seguimiento del progreso y fecha límite opcional.
+- **Subir facturas** en PDF o imagen. Finly extrae comercio, fecha, ítems y total, te los muestra para revisión y solo registra el gasto cuando tú confirmas.
+- **Descargar informes mensuales** en PDF y ver en qué categorías gastas más.
+- **Programar recordatorios** de una sola vez o recurrentes (diarios, semanales, quincenales, mensuales o personalizados) y recibirlos como notificaciones push.
+- **Pedir consejos financieros** sobre ahorro, presupuesto, deudas o cualquier duda de dinero, incluso sin tener cuenta.
+- **Retomar conversaciones** desde el historial del menú lateral, cada una con un título generado a partir del primer mensaje.
+- **Usar las secciones propias** de Facturas, Metas, Informes y Recordatorios, además del chat.
 
-Todo cálculo financiero se hace en el backend con `Decimal`; el modelo de IA solo interpreta y redacta con los resultados que devuelven las herramientas. Las respuestas son informativas y **no constituyen asesoría financiera profesional**.
+Todo cálculo financiero se hace en el backend con `Decimal`. El modelo de IA solo interpreta tu mensaje y redacta la respuesta con los resultados de las herramientas. Sus respuestas son informativas y **no constituyen asesoría financiera profesional**.
 
 ---
 
-## Demo para invitados
+## Usar Finly sin cuenta
 
-La ruta `/` es pública. Un visitante puede conversar con Finly en modo demostración:
+La página principal es pública, así que puedes empezar a conversar sin registrarte. Sin cuenta puedes hacerle preguntas y pedirle consejos financieros, por ejemplo cómo armar un presupuesto, qué es un fondo de emergencia o cómo salir de una deuda.
 
-- **3 mensajes** por sesión, con IA real pero **sin herramientas ni datos reales**: no registra gastos ni consulta información.
-- Los mensajes de demo viven solo en memoria del navegador; no se guardan.
-- El backend limita la demo a **12 mensajes por hora por IP** para proteger el costo de la IA.
-- Al registrarse o iniciar sesión se descartan los mensajes de demo y se carga el historial real de la cuenta.
-- Si el invitado adjunta una factura, se le pide crear cuenta y el archivo se conserva hasta autenticarse.
+Cuando una petición necesita **guardar información**, Finly te pide iniciar sesión o crear una cuenta gratuita. Esto pasa al subir una factura, registrar un ingreso o un gasto, fijar un presupuesto, crear una meta, programar un recordatorio o generar un informe.
+
+Algunos detalles:
+
+- Sin cuenta, los mensajes viven solo en la memoria del navegador y no se guardan.
+- Hay un límite de mensajes por sesión (10) y de mensajes por hora y por IP (12) para controlar el costo de la IA.
+- Si adjuntas una factura antes de iniciar sesión, el archivo se conserva hasta que te autenticas.
+- Al iniciar sesión se carga el historial real de tu cuenta.
 
 ---
 
@@ -61,7 +66,7 @@ api → agent → tools → services → PostgreSQL
 
 **Flujo de un mensaje:** el frontend abre un stream SSE contra `POST /chat` → el agente envía el historial y las herramientas disponibles al LLM → si el modelo pide una herramienta, `tools/` valida y llama a `services/` → el resultado vuelve al modelo → la respuesta final se guarda por conversación y se envía al navegador.
 
-**Multicanal:** el agente es independiente de la interfaz. En el MVP el único canal es la web; un canal futuro (por ejemplo Telegram) se agrega como un router nuevo en `api/` que llame a `agent/service.py`, reutilizando el mismo agente, servicios y base de datos.
+**Pensado para crecer:** el agente es independiente de la interfaz. Hoy el único canal es la web, pero el mismo agente, los mismos servicios y la misma base de datos podrían atender a otros canales, como Telegram, sin duplicar lógica.
 
 ---
 
@@ -76,7 +81,7 @@ api → agent → tools → services → PostgreSQL
 | ORM y migraciones | SQLAlchemy 2.0 async · asyncpg · Alembic |
 | Validación y configuración | Pydantic v2 · pydantic-settings |
 | Autenticación | JWT (python-jose) · hash con argon2 |
-| IA | Gemini con tool calling y visión vía REST, con respaldo Qwen (OpenRouter/Groq) y Ollama (`agent/llm_client.py`) |
+| IA | Gemini con tool calling y visión vía REST. Si falla o agota su cuota, se prueba Qwen (OpenRouter/Groq) y, por último, Ollama (nube o local). Todo en `agent/llm_client.py` |
 | Lectura de facturas | LLM de visión · PyMuPDF para PDF · Pillow para imágenes |
 | Informes PDF | ReportLab · matplotlib |
 | Recordatorios | APScheduler con jobstore en PostgreSQL |
@@ -90,6 +95,7 @@ api → agent → tools → services → PostgreSQL
 | Framework | React 19 · Vite 6 (JavaScript/JSX) |
 | Estilos | Tailwind v4 + sistema de diseño propio en `src/index.css` |
 | Rutas | React Router 7 |
+| Notificaciones | Service Worker (`public/sw.js`) y Web Push |
 | Chat en streaming | SSE con `fetch` |
 | Render de respuestas | Markdown (listas, tablas, código) con `RichText.jsx` |
 
@@ -100,9 +106,9 @@ api → agent → tools → services → PostgreSQL
 | Desarrollo local | Docker Compose (`db`, `backend`, `frontend` opcional) |
 | Despliegue sugerido | Vercel (frontend) · Render o Railway (backend) · Neon o Supabase (PostgreSQL) |
 
-### Fuera del stack
+### Decisiones de diseño
 
-No usar Redis, Celery, Kafka, microservicios, WebSockets ni librerías de agentes (LangChain, LlamaIndex). No agregar dependencias sin justificación.
+Se evitó a propósito la complejidad innecesaria: no usa Redis, Celery, Kafka, WebSockets ni librerías de agentes como LangChain o LlamaIndex. El tool calling está implementado directamente sobre las APIs de los modelos.
 
 ---
 
@@ -111,7 +117,7 @@ No usar Redis, Celery, Kafka, microservicios, WebSockets ni librerías de agente
 ### Requisitos
 
 - Docker y Docker Compose, **o** Python 3.12+ y Node.js 20+.
-- Una API key de Gemini para que el chat funcione (`GEMINI_API_KEY`).
+- Una API key de Gemini (`GEMINI_API_KEY`) para que el chat funcione. Alternativamente, Ollama local o una clave de Qwen (ver [variables de entorno](#variables-de-entorno)).
 
 ### Variables de entorno
 
@@ -126,11 +132,11 @@ cp .env.example .env
 | `DATABASE_URL` | Sí | Cadena async de PostgreSQL (`postgresql+asyncpg://...`). |
 | `JWT_SECRET` | Sí | Secreto para firmar los tokens. Usa uno largo y aleatorio. |
 | `JWT_ALGORITHM` | No | Algoritmo JWT. Por defecto `HS256`. |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | Duración del token. Por defecto `60`. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | Duración del token en minutos. Por defecto `43200` (30 días). |
 | `CORS_ORIGINS` | No | Orígenes permitidos, separados por coma. |
-| `GEMINI_API_KEY` | Sí para IA | Sin ella, el chat y la extracción de facturas no usan Gemini. |
-| `GEMINI_MODEL` | No | Modelo de Gemini. Por defecto `gemini-3.5-flash`. |
-| `LLM_TIMEOUT_SECONDS` | No | Timeout de las llamadas a Gemini. |
+| `GEMINI_API_KEY` | Sí para IA | Proveedor principal. Sin ella, el agente depende de los respaldos (Qwen u Ollama) si los configuras. |
+| `GEMINI_MODEL` | No | Modelo de Gemini. Por defecto `gemini-2.5-flash`. |
+| `LLM_TIMEOUT_SECONDS` | No | Timeout de las llamadas a Gemini. Por defecto `60`. |
 | `QWEN_API_KEY` | No | Clave del respaldo Qwen (OpenRouter o Groq). Sin ella no hay respaldo Qwen. |
 | `QWEN_BASE_URL` | No | `https://openrouter.ai/api/v1` (o `https://api.groq.com/openai/v1`). |
 | `QWEN_MODEL` | No | Modelo Qwen. Por defecto `qwen/qwen3.7-flash`. |
@@ -144,7 +150,8 @@ cp .env.example .env
 | `INVOICE_MAX_PDF_PAGES` | No | Páginas máximas de un PDF. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | No | Claves para notificaciones push. |
 | `VAPID_SUBJECT` | No | Contacto para Web Push (`mailto:...`). |
-| `SCHEDULER_ENABLED` | No | Activa el job de recordatorios. |
+| `SCHEDULER_ENABLED` | No | Activa el job de recordatorios (por defecto `true`). |
+| `REMINDER_POLL_SECONDS` / `REMINDER_MAX_ATTEMPTS` / `REMINDER_RETRY_MINUTES` | No | Frecuencia de revisión, intentos máximos y espera entre reintentos de los recordatorios. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Solo Compose | Credenciales de la base de datos del contenedor. |
 
 Puedes generar las claves VAPID con:
@@ -214,7 +221,7 @@ Abre http://localhost:5173. Vite redirige `/api/*` a `http://localhost:8000` (co
 
 ### Pruebas
 
-Las pruebas del backend necesitan PostgreSQL. `conftest.py` crea y destruye una base `<nombre>_test`; puedes sobreescribirla con `TEST_DATABASE_URL`.
+Las pruebas del backend cubren agente, API, herramientas, servicios, esquemas y scheduler, y necesitan PostgreSQL. `conftest.py` crea y destruye una base `<nombre>_test`; puedes sobreescribirla con `TEST_DATABASE_URL`.
 
 ```bash
 cd backend
@@ -244,8 +251,8 @@ finance-agent/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py            # App FastAPI, CORS, routers y scheduler
-│   │   ├── api/               # Routers HTTP (auth, chat, invoices, reports, dashboard, push)
-│   │   ├── agent/             # Orquestador, prompts, cliente Gemini, extractor de facturas
+│   │   ├── api/               # Routers HTTP (auth, chat, invoices, goals, reminders, reports, dashboard, push)
+│   │   ├── agent/             # Orquestador, prompts, clientes de IA (Gemini/Qwen/Ollama), extractor de facturas
 │   │   ├── tools/             # Herramientas expuestas al agente
 │   │   ├── services/          # Lógica de negocio y cálculos financieros
 │   │   ├── models/            # Entidades SQLAlchemy
@@ -254,7 +261,7 @@ finance-agent/
 │   │   └── jobs/              # Scheduler de recordatorios
 │   ├── alembic/versions/      # Migraciones
 │   ├── scripts/               # Utilidades (claves VAPID)
-│   ├── tests/                 # services, tools y api
+│   ├── tests/                 # agent, api, jobs, schemas, services y tools
 │   ├── alembic.ini
 │   ├── pyproject.toml
 │   └── Dockerfile
@@ -262,8 +269,8 @@ finance-agent/
 └── frontend/
     ├── src/
     │   ├── api/               # Cliente HTTP y streaming SSE
-    │   ├── hooks/             # useAuth, useChatStream
-    │   ├── pages/             # Home (chat público), Login, Register
+    │   ├── hooks/             # useAuth, useChatStream, usePushNotifications, conversaciones
+    │   ├── pages/             # Home (chat público), Facturas, Metas, Informes, Recordatorios, Login, Register
     │   ├── components/
     │   │   ├── chat/          # Welcome, Messages, Composer, RichText, tarjetas
     │   │   ├── auth/          # AuthLayout, AuthForm, AuthModal
@@ -271,22 +278,17 @@ finance-agent/
     │   │   ├── dashboard/     # Resumen
     │   │   └── layout/        # Sidebar y Topbar
     │   └── lib/               # Formato de moneda, fechas y nombres
+    ├── public/                # sw.js (push) y logo
     ├── vite.config.js
     ├── package.json
     └── Dockerfile
 ```
 
-### Reglas de crecimiento de la estructura
-
-- Un archivo por dominio en cada capa. Si un archivo supera ~300 líneas, se convierte en carpeta.
-- Un dominio nuevo implica: modelo, schema, service, tool (si el agente lo usa) y router.
-- Los canales futuros (Telegram) se agregan como un router nuevo en `api/` que llama a `agent/service.py`. No se duplica lógica.
-
 ---
 
 ## API principal
 
-Todas las rutas requieren `Authorization: Bearer <token>` salvo las marcadas como públicas.
+Documentación interactiva en `/docs` al levantar el backend. Todas las rutas requieren `Authorization: Bearer <token>` salvo las marcadas como públicas.
 
 | Método | Ruta | Descripción |
 |---|---|---|
@@ -298,81 +300,47 @@ Todas las rutas requieren `Authorization: Bearer <token>` salvo las marcadas com
 | `GET` / `POST` | `/chat/conversations` | Lista o crea conversaciones. |
 | `GET` | `/chat/conversations/{id}/messages` | Historial de una conversación. |
 | `POST` | `/chat/conversations/{id}/messages` | Guarda un intercambio ya resuelto (p. ej. una factura). |
-| `POST` | `/invoices` | Sube una factura (multipart) y devuelve el borrador extraído. |
+| `GET` | `/chat/history` | Historial de mensajes del usuario. |
+| `GET` / `POST` | `/invoices` | Lista facturas o sube una (multipart) y devuelve el borrador extraído. |
 | `GET` | `/invoices/{id}` | Consulta una factura. |
+| `GET` / `POST` | `/goals` | Lista o crea metas de ahorro. |
+| `PATCH` / `DELETE` | `/goals/{id}` | Edita o elimina una meta. |
+| `POST` | `/goals/{id}/contributions` | Registra un aporte a una meta. |
+| `GET` / `POST` | `/reminders` | Lista o crea recordatorios. |
+| `DELETE` | `/reminders/{id}` | Cancela un recordatorio. |
 | `GET` | `/dashboard` | Resumen financiero del mes. |
 | `GET` | `/reports/monthly/{YYYY-MM}` | Informe mensual. |
 | `GET` | `/reports/monthly/{YYYY-MM}/pdf` | Informe mensual en PDF. |
-| `GET` / `POST` / `DELETE` | `/push/...` | Claves, suscripciones y envío de prueba. |
+| `GET` | `/push/public-key` | Clave pública VAPID. |
+| `POST` / `DELETE` | `/push/subscriptions` | Registra o elimina una suscripción push. |
+| `POST` | `/push/test` | Envía una notificación de prueba. |
 | `GET` | `/health` | Estado del servicio. Público. |
 
 ---
 
-## Reglas de desarrollo
+## Principios del proyecto
 
-### Arquitectura
-
-1. El agente nunca accede a la base de datos. Solo ejecuta herramientas de `tools/` (RF-06, RNF-06).
-2. Cada tool llama a un service. Los services son el único código que usa `AsyncSession` (RNF-04).
-3. El `user_id` siempre proviene del token JWT, nunca de los argumentos del modelo ni del cuerpo de la petición (RF-03, RNF-03).
-4. Todo cálculo financiero (balance, presupuesto, progreso de metas, reportes) se hace en `services/` con `Decimal`. El LLM solo redacta con los resultados (RNF-05).
-5. El resto del código solo depende de `chat(messages, tools) -> LLMResponse` en `agent/llm_client.py`. Ningún SDK de IA se importa fuera de ese archivo, lo que permite cambiar de proveedor o usar un modelo local.
-6. Los routers no contienen lógica de negocio.
-7. Los argumentos de cada tool se validan con un modelo Pydantic antes de ejecutarse (RNF-07).
-8. El agente no depende de la interfaz. Ningún canal duplica lógica de negocio (arquitectura multicanal).
-
-### Código
-
-1. Todo el backend es asíncrono (`async def`, `AsyncSession`). El trabajo bloqueante (OCR, PDF) se ejecuta con `run_in_threadpool`.
-2. Dinero: `Decimal` en Python y `Numeric(14, 2)` en PostgreSQL. Nunca `float`.
-3. Fechas y horas se guardan en UTC junto con la zona horaria del usuario (RNF-10).
-4. Todo cambio de esquema pasa por una migración de Alembic (RNF-09).
-5. Configuración y secretos solo mediante variables de entorno (`.env`). Nunca en el código.
-6. Las contraseñas se almacenan solo como hash (RNF-02).
-7. Errores de dominio se lanzan desde `core/errors.py` y se traducen a HTTP en un único manejador. Se deben cubrir archivos inválidos, información incompleta, fallos de procesamiento e IA no disponible (RNF-08).
-8. Cada service nuevo incluye pruebas. Las pruebas del agente usan una función `chat` falsa, nunca el proveedor real.
-9. Nombres en inglés para código; textos de cara al usuario en español.
-10. Cambios mínimos y dirigidos: no reescribir archivos completos ni refactorizar fuera del alcance de la tarea.
-11. La interfaz es responsive y funciona en computador y móvil (RNF-01).
-
-### Negocio
-
-1. Cada movimiento pertenece a un usuario (RB-01).
-2. Los valores de ingresos y gastos son mayores que cero (RB-02).
-3. Todo movimiento tiene tipo, valor, concepto y fecha (RB-03).
-4. Los gastos se clasifican en categorías (RB-04).
-5. Balance = ingresos − gastos (RB-05).
-6. Las facturas se guardan primero como borrador. El gasto y sus ítems se crean solo después de que el usuario confirme (RB-06, RF-21).
-7. Una factura puede contener múltiples productos o servicios (RB-07).
-8. El total de una factura confirmada es el valor del gasto, sin duplicar movimientos (RB-08).
-9. El presupuesto mensual se calcula con los gastos del periodo (RB-09).
-10. Los aportes a una meta de ahorro actualizan su progreso (RB-10) y el porcentaje se calcula con el monto acumulado y el objetivo (RB-13).
-11. Los aportes a metas tienen tabla propia y no se suman como gastos en el balance (RB-11).
-12. Una meta tiene monto objetivo obligatorio y fecha límite opcional (RB-12).
-13. Los recordatorios recurrentes calculan y guardan su próxima ejecución (`next_run_at`) según la frecuencia configurada (RB-14). Cancelar uno no afecta a los demás (RB-15).
-14. Las recomendaciones del agente son informativas y no constituyen asesoría financiera profesional (RB-16).
-
-### Agente de IA
-
-1. No inventar movimientos, valores, fechas ni resultados. Si falta información o es ambigua, preguntar al usuario (RF-08).
-2. Ejecutar operaciones solo mediante las herramientas registradas (RF-06).
-3. Presentar siempre la información extraída de una factura para revisión antes de registrarla, y permitir que el usuario la corrija (RF-19, RF-20).
-4. Informar cuando una factura no pueda procesarse o falten datos importantes (RF-22).
-5. Los informes PDF se generan solo con datos reales de la base de datos (RF-39, RF-40).
+- **El dinero nunca lo calcula la IA.** Balance, presupuestos, progreso de metas e informes se calculan en el backend con `Decimal`, y el modelo solo redacta con esos resultados.
+- **El agente no toca la base de datos.** Solo puede ejecutar las herramientas registradas, y cada una valida sus argumentos antes de actuar.
+- **Tú confirmas antes de guardar.** Las facturas se leen como borrador y el gasto solo se registra cuando lo apruebas.
+- **Tus datos son tuyos.** Cada movimiento pertenece a un usuario, el `user_id` sale siempre del token de sesión y las contraseñas se guardan solo como hash.
+- **Cambiar de proveedor de IA es sencillo.** Todo pasa por una única función de chat, así que se puede usar Gemini, Qwen u Ollama sin tocar el resto del código.
 
 ---
 
-## Alcance del MVP
+## Fuera del alcance por ahora
 
-No implementar sin autorización explícita: conexión o sincronización con bancos, pagos o transferencias, inversiones, múltiples monedas, reconocimiento de voz, app móvil nativa, deudas y abonos parciales, suscripciones y gastos recurrentes, informes semanales o anuales, predicciones o simulaciones financieras, detección avanzada de gastos inusuales, entrenamiento de modelos propios, transferencias automáticas a ahorro ni nuevos canales como Telegram.
+Finly es un MVP centrado en el día a día. Todavía no incluye conexión con bancos, pagos o transferencias, inversiones, múltiples monedas, reconocimiento de voz, app móvil nativa, deudas con abonos parciales, gastos recurrentes, informes semanales o anuales, predicciones financieras ni nuevos canales como Telegram.
 
 ---
 
 ## Estado del proyecto
 
-MVP funcional en desarrollo. Funcionan el chat con agente, autenticación, conversaciones e historial, registro de movimientos, presupuestos, metas, facturas con revisión, informes PDF, dashboard y recordatorios. La demo pública para invitados está implementada con límite de mensajes y rate limit por IP.
+MVP funcional en desarrollo. Funcionan el chat con agente, autenticación, conversaciones e historial, registro de movimientos, presupuestos, metas, facturas con revisión, informes PDF, dashboard, recordatorios, notificaciones push y el uso del chat sin cuenta para consultas generales.
 
-Pendiente o en progreso: suscripción a notificaciones push desde la web, despliegue en producción y pulido de la experiencia de chat.
+Pendiente o en progreso: despliegue en producción y pulido de la experiencia de chat.
+
+> Finly ofrece información general y **no reemplaza la asesoría de un profesional financiero**.
 
 ---
 
