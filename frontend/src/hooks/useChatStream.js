@@ -7,7 +7,6 @@ import {
   streamChat,
   streamDemoChat,
 } from '../api/chat.js'
-import { getDashboard } from '../api/dashboard.js'
 
 /*
   Mensaje de usuario: { id, role: 'user', text, fileName? }
@@ -28,27 +27,88 @@ const TOOL_LABELS = [
 ]
 const labelFor = (name) => TOOL_LABELS.find(([re]) => re.test(name))?.[1] ?? 'Trabajando en ello…'
 
-// Tras estas herramientas el balance del mes cambió: se muestra una tarjeta con datos reales de /dashboard
-const BALANCE_CHANGING = new Set(['add_transaction', 'update_transaction', 'delete_transaction', 'confirm_invoice'])
+// Si el turno falla después de ejecutar una de estas, reintentar podría duplicar el cambio.
+const SIDE_EFFECT_TOOLS = new Set([
+  'add_transaction',
+  'update_transaction',
+  'delete_transaction',
+  'set_budget',
+  'create_savings_goal',
+  'update_savings_goal',
+  'delete_savings_goal',
+  'add_goal_contribution',
+  'create_reminder',
+  'update_reminder',
+  'cancel_reminder',
+  'update_invoice',
+  'update_invoice_item',
+  'add_invoice_item',
+  'delete_invoice_item',
+  'confirm_invoice',
+  'discard_invoice',
+])
 
 // Resultado de la herramienta → tarjeta del chat. Los errores no generan tarjeta.
-const TRANSACTION_ACTIONS = {
-  add_transaction: 'created',
-  update_transaction: 'updated',
-  delete_transaction: 'deleted',
+// Solo se usan tarjetas para lo que no cabe en el texto: facturas por revisar y
+// el aviso para activar notificaciones. Las consultas se responden con texto.
+
+// Herramientas cuyo resultado es (o contiene) una factura.
+const INVOICE_TOOLS = new Set([
+  'get_invoice',
+  'confirm_invoice',
+  'update_invoice',
+  'update_invoice_item',
+  'add_invoice_item',
+  'delete_invoice_item',
+])
+
+const invoiceCard = (invoice) =>
+  invoice?.id ? { type: 'invoice', data: invoice } : null
+
+function cardsFromToolResult(name, result) {
+  if (!result || result.error) return []
+  if (name === 'create_reminder' && result.notifications_enabled === false) {
+    return [{ type: 'notifications', data: { concept: result.concept } }]
+  }
+  if (name === 'list_draft_invoices') {
+    return (result.invoices ?? []).map(invoiceCard).filter(Boolean)
+  }
+  if (name === 'discard_invoice') {
+    const card = invoiceCard(result.invoice)
+    return card ? [card] : []
+  }
+  if (INVOICE_TOOLS.has(name)) {
+    const card = invoiceCard(result)
+    return card ? [card] : []
+  }
+  return []
 }
 
-function cardFromToolResult(name, result) {
-  if (!result || result.error) return null
-  const action = TRANSACTION_ACTIONS[name]
-  if (action) {
-    const transaction = action === 'deleted' ? result.transaction : result
-    return transaction?.id ? { type: 'transaction', data: { action, transaction } } : null
+// Evita repetir la misma tarjeta si el agente llama varias veces a la herramienta.
+function cardKey(card) {
+  switch (card?.type) {
+    case 'invoice':
+      return `invoice:${card.data?.invoice_id ?? card.data?.id}`
+    case 'notifications':
+      return card.type
+    default:
+      return null
   }
-  if (name === 'get_monthly_report' && result.month && result.pdf_url) {
-    return { type: 'report', data: result }
+}
+
+function mergeCards(current, incoming) {
+  const next = [...current]
+  for (const card of incoming) {
+    const key = cardKey(card)
+    if (!key) {
+      next.push(card)
+      continue
+    }
+    const index = next.findIndex((item) => cardKey(item) === key)
+    if (index >= 0) next[index] = card
+    else next.push(card)
   }
-  return null
+  return next
 }
 
 // Mensaje guardado en el servidor → mensaje del chat
@@ -60,7 +120,7 @@ function fromServer(item) {
     id: `h-${item.id}`,
     role: 'agent',
     text: item.content,
-    cards: [],
+    cards: item.cards ?? [],
     quickReplies: [],
     status: 'done',
   }
@@ -83,8 +143,12 @@ export function useChatStream({ enabled = true } = {}) {
     )
   }, [])
 
-  const pushUser = useCallback((text, fileName) => {
-    setMessages((prev) => [...prev, { id: uid(), role: 'user', text, fileName }])
+  const pushUser = useCallback((text, fileName, file) => {
+    setMessages((prev) => [...prev, { id: uid(), role: 'user', text, fileName, file }])
+  }, [])
+
+  const removeMessage = useCallback((id) => {
+    setMessages((prev) => prev.filter((message) => message.id !== id))
   }, [])
 
   // Mensaje de agente local (no viene del stream)
@@ -121,20 +185,21 @@ export function useChatStream({ enabled = true } = {}) {
 
   // Guarda un intercambio que no pasó por la IA (por ejemplo, una factura revisada).
   const saveExchange = useCallback(
-    async (userText, assistantText) => {
-      const conversationId = await ensureConversation(titleFrom(userText))
-      await addExchange(conversationId, { userText, assistantText })
+    async (userText, assistantText, title, cards = []) => {
+      const conversationId = await ensureConversation(title || titleFrom(userText))
+      await addExchange(conversationId, { userText, assistantText, cards })
       await refreshConversations()
     },
     [ensureConversation, refreshConversations],
   )
 
   const send = useCallback(
-    async (text) => {
+    async (text, { appendUser = true } = {}) => {
       if (!enabled) return
       // Cualquier carga de historial pendiente ya no debe sobrescribir este envío.
       loadSeqRef.current += 1
-      pushUser(text)
+      // En un reintento el mensaje de usuario ya está en la lista.
+      if (appendUser) pushUser(text)
       const id = beginAgent()
       const controller = new AbortController()
       abortRef.current = controller
@@ -162,27 +227,30 @@ export function useChatStream({ enabled = true } = {}) {
             tools.add(data?.name)
             updateMessage(id, { toolLabel: labelFor(data?.name ?? '') })
           } else if (event === 'tool_result') {
-            const card = cardFromToolResult(data?.name, data?.result)
-            if (card) updateMessage(id, (m) => ({ cards: [...m.cards, card] }))
+            const cards = cardsFromToolResult(data?.name, data?.result)
+            if (cards.length) {
+              updateMessage(id, (m) => ({ cards: mergeCards(m.cards, cards) }))
+            }
           } else if (event === 'message') {
             updateMessage(id, { text: data?.text ?? '', status: 'streaming', toolLabel: undefined })
           } else if (event === 'error') {
             throw new Error(data?.message ?? 'El agente no pudo responder.')
           }
         }
-        updateMessage(id, { status: 'done', toolLabel: undefined })
-
-        if ([...tools].some((t) => BALANCE_CHANGING.has(t))) {
-          try {
-            const { summary } = await getDashboard()
-            updateMessage(id, (m) => ({ cards: [...m.cards, { type: 'balance', data: summary }] }))
-          } catch {
-            /* la tarjeta es opcional */
-          }
-        }
+        updateMessage(id, {
+          status: 'done',
+          toolLabel: undefined,
+          sideEffects: [...tools].some((name) => SIDE_EFFECT_TOOLS.has(name)),
+        })
       } catch (err) {
         if (err?.name === 'AbortError') updateMessage(id, { status: 'done', toolLabel: undefined })
-        else updateMessage(id, { status: 'error', toolLabel: undefined, error: err?.message || 'Ocurrió un error inesperado.' })
+        else
+          updateMessage(id, {
+            status: 'error',
+            toolLabel: undefined,
+            error: err?.message || 'Ocurrió un error inesperado.',
+            sideEffects: [...tools].some((name) => SIDE_EFFECT_TOOLS.has(name)),
+          })
       } finally {
         setIsStreaming(false)
         abortRef.current = null
@@ -196,7 +264,7 @@ export function useChatStream({ enabled = true } = {}) {
 
   // Vista previa para invitados: usa la IA real, sin herramientas ni historial guardado.
   const sendDemo = useCallback(
-    async (text) => {
+    async (text, { appendUser = true } = {}) => {
       const history = messages
         .filter((m) => m.text && m.status !== 'error')
         .slice(-8)
@@ -206,7 +274,7 @@ export function useChatStream({ enabled = true } = {}) {
         }))
 
       loadSeqRef.current += 1
-      pushUser(text)
+      if (appendUser) pushUser(text)
       const id = beginAgent()
       const controller = new AbortController()
       abortRef.current = controller
@@ -226,7 +294,12 @@ export function useChatStream({ enabled = true } = {}) {
         updateMessage(id, { status: 'done' })
       } catch (err) {
         if (err?.name === 'AbortError') updateMessage(id, { status: 'done' })
-        else updateMessage(id, { status: 'error', error: err?.message || 'Ocurrió un error inesperado.' })
+        else
+          updateMessage(id, {
+            status: 'error',
+            error: err?.message || 'Ocurrió un error inesperado.',
+            sideEffects: false,
+          })
       } finally {
         setIsStreaming(false)
         abortRef.current = null
@@ -318,6 +391,7 @@ export function useChatStream({ enabled = true } = {}) {
     pushAgent,
     beginAgent,
     updateMessage,
+    removeMessage,
     reset,
     selectConversation,
     saveExchange,

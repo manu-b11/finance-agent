@@ -1,9 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
+import { ConfirmProvider } from './hooks/useConfirm.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Home from './pages/Home.jsx'
 import Invoices from './pages/Invoices.jsx'
+import Goals from './pages/Goals.jsx'
+import Reminders from './pages/Reminders.jsx'
+import Reports from './pages/Reports.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -20,17 +24,21 @@ function PublicRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* El chat es público: un invitado puede verlo y probarlo.
-              Tras unos mensajes de prueba se le pide crear cuenta o iniciar sesión. */}
-          <Route path="/" element={<Home />} />
-          <Route path="/facturas" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
-          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          <Routes>
+            {/* El chat es público: se pide cuenta cuando el usuario quiere guardar su información. */}
+            <Route path="/" element={<Home />} />
+            <Route path="/facturas" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+            <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
+            <Route path="/informes" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/recordatorios" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
+            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AuthProvider>
+      </ConfirmProvider>
     </BrowserRouter>
   )
 }

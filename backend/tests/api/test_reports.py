@@ -65,6 +65,8 @@ async def test_monthly_report_json(client, session):
     assert body["balance"] == "2600.00"
     assert body["categories"][0]["label"] == "Alimentación"
     assert body["top_category"] == "alimentacion"
+    assert body["expense_count"] == 1
+    assert [expense["concept"] for expense in body["expenses"]] == ["Mercado"]
 
 
 async def test_monthly_report_pdf_download(client, session):
@@ -82,6 +84,8 @@ async def test_monthly_report_pdf_download(client, session):
     assert "Noviembre de 2026" in text
     assert "$3.000" in text
     assert "Alimentación" in text
+    assert "Gastos del mes" in text
+    assert "Mercado" in text
 
 
 async def test_pdf_only_contains_the_authenticated_users_data(client, session):

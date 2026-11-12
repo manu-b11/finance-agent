@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.jsx'
+import { useConfirm } from '../hooks/useConfirm.jsx'
 import { useChatStream } from '../hooks/useChatStream.js'
 import { uploadInvoice } from '../api/invoices.js'
 import { errorMessage } from '../api/client.js'
@@ -10,12 +12,17 @@ import Welcome from '../components/chat/Welcome.jsx'
 import Composer from '../components/chat/Composer.jsx'
 import Messages from '../components/chat/Messages.jsx'
 import AuthModal from '../components/auth/AuthModal.jsx'
+import { detectIntent, LIMIT_INTENT } from '../lib/guestIntent.js'
+import { capabilitiesText } from '../lib/capabilities.js'
 
 const isDesktop = () => window.matchMedia('(min-width:1024px)').matches
-const GUEST_LIMIT = 3
+const GUEST_LIMIT = 10
 
 export default function Home() {
   const { user, loading, logout } = useAuth()
+  const confirm = useConfirm()
+  const location = useLocation()
+  const navigate = useNavigate()
   const {
     messages,
     conversations,
@@ -25,8 +32,10 @@ export default function Home() {
     send,
     sendDemo,
     pushUser,
+    pushAgent,
     beginAgent,
     updateMessage,
+    removeMessage,
     reset,
     selectConversation,
     saveExchange,
@@ -39,7 +48,36 @@ export default function Home() {
   const [collapsed, setCollapsed] = useState(false)
   const [authMode, setAuthMode] = useState(null)
   const [guestTurns, setGuestTurns] = useState(0)
+  const [pending, setPending] = useState(null)
+  const [pendingReady, setPendingReady] = useState(false)
   const composerRef = useRef(null)
+
+  useEffect(() => {
+    const incoming = location.state
+    if (!incoming || !historyLoaded) return
+    if (incoming.conversationId) selectConversation(incoming.conversationId)
+    else if (incoming.newChat) reset()
+    if (incoming.prefill) {
+      setValue(incoming.prefill)
+      window.setTimeout(() => composerRef.current?.focus(), 150)
+    }
+    navigate('/', { replace: true, state: null })
+  }, [location.state, historyLoaded, selectConversation, reset, navigate])
+
+  useEffect(() => {
+    if (!user || !historyLoaded || !pending || pendingReady) return
+    reset()
+    setPendingReady(true)
+  }, [user, historyLoaded, pending, pendingReady, reset])
+
+  useEffect(() => {
+    if (!pendingReady || !pending) return
+    const { text, file: attached } = pending
+    setPending(null)
+    setPendingReady(false)
+    if (attached) handleInvoice(attached, text)
+    else send(text)
+  }, [pendingReady, pending, send])
 
   const inChat = messages.length > 0
   const busy = isStreaming || uploading
@@ -54,7 +92,16 @@ export default function Home() {
     setDrawerOpen(false)
   }
 
-  // Tras registrarse o iniciar sesión se conserva lo que el invitado había escrito.
+  const openSignup = (mode, data) => {
+    if (data?.kind && data.kind !== 'limit') setPending({ text: data.text ?? '', file: data.file ?? null })
+    openAuth(mode)
+  }
+
+  const closeAuth = () => {
+    setAuthMode(null)
+    setPending(null)
+  }
+
   const finishAuth = () => {
     setAuthMode(null)
     setDrawerOpen(false)
@@ -89,16 +136,25 @@ export default function Home() {
     composerRef.current?.focus()
   }
 
-  // El invitado puede adjuntar la factura, pero necesita cuenta para subirla:
-  // se conserva el archivo y se abre el registro.
-  const changeFile = (next) => {
-    setFile(next)
-    if (next && !user) setAuthMode('register')
+  // Respuesta fija: no pasa por la IA. Con sesión se guarda en el historial (solo BD).
+  const showCapabilities = async () => {
+    const question = '¿Qué puedes hacer?'
+    const answer = capabilitiesText({ guest: !user })
+    pushUser(question)
+    pushAgent({ text: answer })
+    if (!user) return
+    try {
+      await saveExchange(question, answer, 'Qué puede hacer Finly')
+    } catch {
+      /* el mensaje ya se mostró; guardar el historial es opcional */
+    }
   }
 
+  const changeFile = (next) => setFile(next)
+
   // Subida de factura: se crea el borrador y se muestra para revisión (RF-19, RF-20)
-  async function handleInvoice(attached, text) {
-    pushUser(text, attached.name)
+  async function handleInvoice(attached, text, { appendUser = true } = {}) {
+    if (appendUser) pushUser(text, attached.name, attached)
     const id = beginAgent()
     setUploading(true)
     try {
@@ -106,7 +162,7 @@ export default function Home() {
       updateMessage(id, {
         status: 'done',
         text: 'Revisé tu factura. Esto fue lo que encontré; **aún no la he registrado**. Revísala y corrígela si algo no coincide.',
-        cards: [{ type: 'invoice_draft', data: invoice }],
+        cards: [{ type: 'invoice', data: invoice }],
       })
 
       // La subida no pasa por /chat: guardamos un resumen de texto para que quede en el historial.
@@ -120,12 +176,15 @@ export default function Home() {
       const userText = text || `Subí una factura (${attached.name})`
       const assistantText = `Revisé tu factura${details ? ` (${details})` : ''}. Aún no la he registrado; revísala y confírmala cuando esté lista.`
       try {
-        await saveExchange(userText, assistantText)
+        await saveExchange(userText, assistantText, undefined, [
+          { type: 'invoice', data: { invoice_id: invoice.id } },
+        ])
       } catch {
         /* el historial es opcional; la factura ya se mostró */
       }
     } catch (err) {
-      updateMessage(id, { status: 'error', error: errorMessage(err) })
+      // La subida pudo crear el borrador antes de fallar: reintentar podría duplicarlo.
+      updateMessage(id, { status: 'error', error: errorMessage(err), sideEffects: true })
     } finally {
       setUploading(false)
     }
@@ -138,14 +197,19 @@ export default function Home() {
     const attached = override === undefined ? file : null
     if (!text && !attached) return
 
-    // Invitado: puede probar la demo unas cuantas veces; después se le pide cuenta.
     if (!user) {
-      if (attached || guestTurns >= GUEST_LIMIT) {
-        if (text) setValue(text)
-        setAuthMode('register')
+      const intent = detectIntent(text, Boolean(attached))
+      const blocked = !intent && guestTurns >= GUEST_LIMIT
+      if (override === undefined) {
+        setValue('')
+        setFile(null)
+      }
+      if (intent || blocked) {
+        const prompt = intent ?? LIMIT_INTENT
+        pushUser(text, attached?.name)
+        pushAgent({ text: prompt.reply, cards: [{ type: 'signup', data: { ...prompt, text, file: attached } }] })
         return
       }
-      setValue('')
       setGuestTurns((n) => n + 1)
       await sendDemo(text)
       return
@@ -157,6 +221,31 @@ export default function Home() {
     }
     if (attached) await handleInvoice(attached, text)
     else await send(text)
+  }
+
+  // Reintenta un turno: quita la respuesta y reenvía el mensaje ya visible.
+  const retry = async (message) => {
+    if (busy) return
+    if (message.sideEffects) {
+      const ok = await confirm({
+        title: 'Repetir esta acción',
+        message:
+          'Esta respuesta ya registró o modificó datos. Si la generas de nuevo, podrías duplicar la operación.',
+        confirmLabel: 'Sí, repetir',
+        danger: true,
+      })
+      if (!ok) return
+    }
+    const index = messages.findIndex((m) => m.id === message.id)
+    if (index < 0) return
+    let previous = index - 1
+    while (previous >= 0 && messages[previous].role !== 'user') previous -= 1
+    if (previous < 0) return
+    const prompt = messages[previous]
+    removeMessage(message.id)
+    if (!user) sendDemo(prompt.text, { appendUser: false })
+    else if (prompt.file) handleInvoice(prompt.file, prompt.text, { appendUser: false })
+    else send(prompt.text, { appendUser: false })
   }
 
   const composer = (
@@ -193,32 +282,26 @@ export default function Home() {
 
         <div className="content">
           {!historyLoaded ? null : inChat ? (
-            <Messages messages={messages} busy={busy} onSend={submit} />
+            <Messages
+              messages={messages}
+              busy={busy}
+              onSend={submit}
+              onSignup={openSignup}
+              onRetry={retry}
+            />
           ) : (
             <Welcome
               name={user ? firstName(user) : ''}
               guest={!user}
-              guestLeft={!user ? Math.max(GUEST_LIMIT - guestTurns, 0) : 0}
               onFill={fill}
               onSend={submit}
               onUpload={() => composerRef.current?.openFilePicker()}
+              onCapabilities={showCapabilities}
             >
               {composer}
             </Welcome>
           )}
         </div>
-
-        {!user && guestTurns >= GUEST_LIMIT && (
-          <div className="guest-limit">
-            <div className="guest-limit-copy">
-              <b>¿Seguimos?</b>
-              <span>Crea una cuenta para seguir conversando y guardar tus finanzas.</span>
-            </div>
-            <button className="btn primary" onClick={() => openAuth('register')}>
-              Crear cuenta
-            </button>
-          </div>
-        )}
 
         {inChat && <div className="dock">{composer}</div>}
       </main>
@@ -227,7 +310,7 @@ export default function Home() {
         <AuthModal
           mode={authMode}
           onSwitch={setAuthMode}
-          onClose={() => setAuthMode(null)}
+          onClose={closeAuth}
           onSuccess={finishAuth}
         />
       )}

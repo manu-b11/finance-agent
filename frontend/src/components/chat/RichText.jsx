@@ -57,7 +57,7 @@ function renderInlineToken(token, key) {
 }
 
 function matchListLine(line) {
-  const bullet = /^(\s*)[-*+]\s+(.*)$/.exec(line)
+  const bullet = /^(\s*)[-*+•·]\s+(.*)$/.exec(line)
   if (bullet) return { indent: bullet[1].length, ordered: false, text: bullet[2] }
   const numbered = /^(\s*)\d+[.)]\s+(.*)$/.exec(line)
   if (numbered) return { indent: numbered[1].length, ordered: true, text: numbered[2] }
@@ -242,6 +242,22 @@ function renderTable(table, key) {
   )
 }
 
+function renderParagraph(text, key) {
+  // Respeta los saltos de línea aunque el modelo no use viñetas: sin esto,
+  // varias líneas se muestran como un único párrafo pegado.
+  const lines = text.split('\n')
+  return (
+    <p key={key} className="md-paragraph">
+      {lines.map((line, index) => (
+        <Fragment key={index}>
+          {index > 0 && <br />}
+          {renderInline(line)}
+        </Fragment>
+      ))}
+    </p>
+  )
+}
+
 function renderBlock(block, key) {
   switch (block.type) {
     case 'heading': {
@@ -259,9 +275,18 @@ function renderBlock(block, key) {
     case 'list': {
       const Tag = block.ordered ? 'ol' : 'ul'
       return (
-        <Tag key={key} className="md-list">
+        <Tag key={key} className={`md-list${block.ordered ? '' : ' md-list-dash'}`}>
           {block.items.map((item, index) => (
-            <li key={index}>{renderInline(item)}</li>
+            <li key={index}>
+              {block.ordered ? (
+                renderInline(item)
+              ) : (
+                <>
+                  <span className="md-dash">- </span>
+                  {renderInline(item)}
+                </>
+              )}
+            </li>
           ))}
         </Tag>
       )
@@ -279,11 +304,7 @@ function renderBlock(block, key) {
         </pre>
       )
     default:
-      return (
-        <p key={key} className="md-paragraph">
-          {renderInline(block.text)}
-        </p>
-      )
+      return renderParagraph(block.text, key)
   }
 }
 

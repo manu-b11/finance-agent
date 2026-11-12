@@ -23,6 +23,16 @@ class ExpenseCategory(StrEnum):
     EDUCATION = "educacion"
     ENTERTAINMENT = "entretenimiento"
     CLOTHING = "ropa"
+    BEAUTY = "belleza"
+    HOME = "hogar"
+    PETS = "mascotas"
+    GIFTS = "regalos"
+    TRAVEL = "viajes"
+    SUBSCRIPTIONS = "suscripciones"
+    SPORTS = "deporte"
+    TECHNOLOGY = "tecnologia"
+    INSURANCE = "seguros"
+    TAXES = "impuestos"
     OTHER = "otros"
 
 

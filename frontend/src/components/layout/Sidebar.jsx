@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Icon from '../Icon.jsx'
+import BrandMark from '../BrandMark.jsx'
 import { displayName, initial } from '../../lib/format.js'
 
 const NAV = [
   { icon: 'receipt', label: 'Facturas', to: '/facturas' },
-  { icon: 'report', label: 'Informes' },
-  { icon: 'bell', label: 'Recordatorios' },
+  { icon: 'goal', label: 'Metas', to: '/metas' },
+  { icon: 'report', label: 'Informes', to: '/informes' },
+  { icon: 'bell', label: 'Recordatorios', to: '/recordatorios' },
 ]
 
 /*
@@ -68,7 +70,7 @@ export default function Sidebar({
       <aside className={`sidebar${open ? ' open' : ''}`} aria-label="Navegación">
         <div className="brand">
           <div className="brand-left">
-            <div className="brand-mark"><Icon name="logo" /></div>
+            <BrandMark />
             <span className="wordmark">Finly</span>
           </div>
           <div className="brand-actions">

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import AuthForm from './AuthForm.jsx'
 import Icon from '../Icon.jsx'
+import BrandMark from '../BrandMark.jsx'
 
 // Modal de acceso que se abre desde el chat cuando un invitado intenta escribir.
 export default function AuthModal({ mode = 'login', onSwitch, onClose, onSuccess }) {
@@ -22,7 +23,7 @@ export default function AuthModal({ mode = 'login', onSwitch, onClose, onSuccess
         </button>
 
         <div className="auth-modal-brand">
-          <span className="brand-mark"><Icon name="logo" /></span>
+          <BrandMark />
           <span className="wordmark">Finly</span>
         </div>
 

@@ -3,7 +3,12 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.reminder import ReminderCreate, ReminderListQuery, ReminderRef, ReminderUpdate
+from app.schemas.reminder import (
+    ReminderCreate,
+    ReminderListQuery,
+    ReminderRef,
+    ReminderUpdate,
+)
 from app.services import push as push_service
 from app.services import reminder as reminder_service
 
@@ -13,6 +18,7 @@ async def create_reminder(
 ) -> dict[str, Any]:
     args = ReminderCreate.model_validate(raw_args)
     reminder = await reminder_service.create_reminder(session, user_id, args)
+    await reminder_service.notify_created(session, user_id, reminder)
     return {
         **reminder.model_dump(mode="json"),
         "notifications_enabled": await push_service.has_subscription(session, user_id),

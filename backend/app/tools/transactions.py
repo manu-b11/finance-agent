@@ -10,6 +10,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.categorization import infer_category
+from app.core.clock import local_today
 from app.schemas.transaction import (
     BalanceRead,
     PeriodQuery,
@@ -19,14 +21,24 @@ from app.schemas.transaction import (
     TransactionRef,
     TransactionUpdate,
 )
+from app.services import auth as auth_service
 from app.services import transaction as transaction_service
 
 
 async def add_transaction(
     session: AsyncSession, user_id: uuid.UUID, raw_args: dict[str, Any]
 ) -> dict[str, Any]:
-    args = TransactionCreate.model_validate(raw_args)
-    transaction = await transaction_service.create_transaction(session, user_id, args)
+    # El usuario no debería tener que dictar la categoría ni la fecha: se
+    # deducen del concepto y de su zona horaria cuando el modelo no las envía.
+    args = dict(raw_args)
+    if args.get("type") == "expense" and not args.get("category"):
+        args["category"] = infer_category(str(args.get("concept") or "")).value
+    if not args.get("occurred_on"):
+        user = await auth_service.get_user_by_id(session, user_id)
+        timezone = user.timezone if user is not None else "UTC"
+        args["occurred_on"] = local_today(timezone).isoformat()
+    parsed = TransactionCreate.model_validate(args)
+    transaction = await transaction_service.create_transaction(session, user_id, parsed)
     return TransactionRead.model_validate(transaction).model_dump(mode="json")
 
 
@@ -56,7 +68,17 @@ async def list_transactions(
     args = TransactionFilters.model_validate(raw_args)
     transactions = await transaction_service.list_transactions(session, user_id, args)
     items = [TransactionRead.model_validate(t).model_dump(mode="json") for t in transactions]
-    return {"count": len(items), "transactions": items}
+    filters = args.model_dump(mode="json", exclude={"limit"}, exclude_none=True)
+    total, total_count = await transaction_service.summarize_transactions(
+        session, user_id, args
+    )
+    return {
+        "count": len(items),
+        "total": str(total),
+        "total_count": total_count,
+        "transactions": items,
+        "filters": filters,
+    }
 
 
 async def get_balance(

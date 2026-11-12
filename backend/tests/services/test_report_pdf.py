@@ -1,10 +1,12 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from uuid import uuid4
 
 import pymupdf
 import pytest
 
 from app.schemas.report import CategoryTotal, MonthlyReportRead
+from app.schemas.transaction import TransactionRead
 from app.services import report_pdf
 
 
@@ -63,6 +65,26 @@ def test_pdf_contains_period_totals_and_category_distribution():
     assert "Alimentación" in text and "Transporte" in text
     assert "80,00 %" in text
     assert "no constituye asesoría financiera profesional" in " ".join(text.split())
+
+
+def test_pdf_lists_individual_expenses():
+    expense = TransactionRead(
+        id=uuid4(),
+        type="expense",
+        amount=Decimal("120.50"),
+        concept="Corte de cabello",
+        category="belleza",
+        occurred_on=date(2026, 11, 10),
+        created_at=datetime(2026, 11, 10, 12, 0, tzinfo=UTC),
+    )
+    content = report_pdf.render_monthly_report(
+        make_report(expenses=[expense], expense_count=1)
+    )
+    text, _, _ = read_pdf(content)
+    assert "Gastos del mes" in text
+    assert "Corte de cabello" in text
+    assert "Belleza" in text
+    assert "$120,50" in text
 
 
 def test_pdf_for_month_without_expenses_has_no_chart_and_says_so():

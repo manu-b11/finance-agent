@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import Icon from '../Icon.jsx'
+import BrandMark from '../BrandMark.jsx'
 
 const POINTS = [
   'Registra gastos e ingresos conversando',
@@ -13,7 +14,7 @@ export default function AuthLayout({ children }) {
     <div className="auth-page">
       <aside className="auth-visual" aria-hidden="true">
         <div className="auth-brand-lg">
-          <span className="brand-mark"><Icon name="logo" /></span>
+          <BrandMark />
           <span className="wordmark">Finly</span>
         </div>
 
@@ -43,7 +44,7 @@ export default function AuthLayout({ children }) {
 
         <div className="auth-panel">
           <div className="auth-mobile-brand">
-            <span className="brand-mark"><Icon name="logo" /></span>
+            <BrandMark />
             <span className="wordmark">Finly</span>
           </div>
           {children}

@@ -19,7 +19,7 @@ async def monthly_report(
     session: AsyncSession = Depends(get_session),
 ) -> MonthlyReportRead:
     return await report_service.get_monthly_report(
-        session, current_user.id, MonthlyReportQuery(month=month)
+        session, current_user.id, MonthlyReportQuery(month=month), include_expenses=True
     )
 
 

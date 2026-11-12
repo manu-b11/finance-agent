@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chat_message import ChatMessage
+from app.schemas.chat import ChatCard
 from app.services import conversation as conversation_service
 
 HISTORY_LIMIT = 20
@@ -32,6 +33,7 @@ async def add_exchange(
     user_text: str,
     assistant_text: str,
     conversation_id: uuid.UUID | None = None,
+    cards: list[ChatCard] | None = None,
 ) -> None:
     if conversation_id is None:
         conversation = await conversation_service.create_conversation(
@@ -58,6 +60,7 @@ async def add_exchange(
             conversation_id=conversation.id,
             role="assistant",
             content=assistant_text,
+            cards=[card.model_dump(mode="json") for card in cards or []],
         )
     )
     await session.commit()

@@ -51,6 +51,15 @@ class ContributionCreate(BaseModel):
     contributed_on: date | None = None
 
 
+class ContributionBody(BaseModel):
+    """Aporte enviado desde la página de metas; la meta va en la ruta."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    contributed_on: date | None = None
+
+
 class GoalRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

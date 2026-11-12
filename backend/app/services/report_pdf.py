@@ -9,7 +9,10 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from app.core.categories import category_label
+from app.core.money import format_cop as format_money
 from app.schemas.report import CategoryTotal, MonthlyReportRead
+from app.schemas.transaction import TransactionRead
 
 MONTH_NAMES = (
     "enero",
@@ -45,15 +48,6 @@ INK = colors.HexColor("#111827")
 MUTED = colors.HexColor("#6b7280")
 LINE = colors.HexColor("#e5e7eb")
 HEADER_BG = colors.HexColor("#f3f4f6")
-
-
-def format_money(value: Decimal) -> str:
-    sign = "-" if value < 0 else ""
-    cents = abs(value).quantize(Decimal("0.01"))
-    integer, fraction = f"{cents:.2f}".split(".")
-    grouped = f"{int(integer):,}".replace(",", ".")
-    suffix = "" if fraction == "00" else f",{fraction}"
-    return f"{sign}${grouped}{suffix}"
 
 
 def format_percentage(value: Decimal) -> str:
@@ -141,6 +135,46 @@ def _category_table(categories: list[CategoryTotal]) -> Table:
     return table
 
 
+def _expenses_table(expenses: list[TransactionRead]) -> Table:
+    cell = ParagraphStyle(
+        "expense-cell", fontName="Helvetica", fontSize=9, leading=12, textColor=INK
+    )
+    header = ParagraphStyle("expense-head", parent=cell, fontName="Helvetica-Bold")
+    right = ParagraphStyle("expense-right", parent=cell, alignment=2)
+    right_header = ParagraphStyle("expense-right-head", parent=header, alignment=2)
+    rows = [
+        [
+            Paragraph("Fecha", header),
+            Paragraph("Concepto", header),
+            Paragraph("Categoría", header),
+            Paragraph("Valor", right_header),
+        ]
+    ]
+    rows.extend(
+        [
+            Paragraph(item.occurred_on.isoformat(), cell),
+            Paragraph(item.concept, cell),
+            Paragraph(category_label(item.category), cell),
+            Paragraph(format_money(item.amount), right),
+        ]
+        for item in expenses
+    )
+    table = Table(rows, colWidths=[2.4 * cm, 7.4 * cm, 3.6 * cm, 3 * cm], repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.5, LINE),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return table
+
+
 def render_monthly_report(report: MonthlyReportRead) -> bytes:
     base = getSampleStyleSheet()
     styles = {
@@ -181,6 +215,18 @@ def render_monthly_report(report: MonthlyReportRead) -> bytes:
         )
     else:
         story.append(Paragraph("No hay gastos registrados en este periodo.", styles["body"]))
+    if report.expenses:
+        story.append(Paragraph("Gastos del mes", styles["heading"]))
+        story.append(_expenses_table(report.expenses))
+        if report.expense_count > len(report.expenses):
+            story.append(Spacer(1, 6))
+            story.append(
+                Paragraph(
+                    f"Mostrando los últimos {len(report.expenses)} de "
+                    f"{report.expense_count} gastos.",
+                    styles["note"],
+                )
+            )
     story.append(Spacer(1, 16))
     story.append(
         Paragraph(f"{DISCLAIMER}<br/>Generado el {report.generated_on.isoformat()}.", styles["note"])

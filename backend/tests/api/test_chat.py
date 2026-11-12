@@ -104,7 +104,13 @@ async def test_chat_reports_ai_unavailable_as_error_event(client):
     assert events == [
         (
             "error",
-            {"code": "ai_unavailable", "message": "El servicio de IA no está disponible en este momento."},
+            {
+                "code": "ai_unavailable",
+                "message": (
+                    "El servicio de IA no está disponible en este momento. "
+                    "Inténtalo de nuevo en unos segundos."
+                ),
+            },
         )
     ]
 
@@ -171,13 +177,52 @@ async def test_chat_creates_conversation_and_lists_it_with_title(client):
     assert body[0]["title"] == "Hola"
 
 
+async def test_saved_exchange_can_include_card_references(client):
+    headers = await auth_headers(client)
+    created = await client.post("/chat/conversations", headers=headers)
+    conversation_id = created.json()["id"]
+    card = {"type": "invoice", "data": {"invoice_id": "inv-1"}}
+    response = await client.post(
+        f"/chat/conversations/{conversation_id}/messages",
+        json={
+            "user_text": "Subí una factura (f.jpg)",
+            "assistant_text": "Revisé tu factura.",
+            "cards": [card],
+        },
+        headers=headers,
+    )
+    assert response.status_code == 204
+
+    messages = (
+        await client.get(
+            f"/chat/conversations/{conversation_id}/messages", headers=headers
+        )
+    ).json()
+    assert messages[0]["cards"] == []
+    assert messages[1]["cards"] == [card]
+
+
+async def test_saved_exchange_rejects_unknown_card_fields(client):
+    headers = await auth_headers(client)
+    created = await client.post("/chat/conversations", headers=headers)
+    response = await client.post(
+        f"/chat/conversations/{created.json()['id']}/messages",
+        json={
+            "user_text": "Hola",
+            "assistant_text": "Hola",
+            "cards": [{"type": "invoice", "data": {}, "raw": "no"}],
+        },
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
 async def test_conversation_messages_are_separated_by_conversation(client):
     headers = await auth_headers(client)
     first = await client.post("/chat/conversations", headers=headers)
     second = await client.post("/chat/conversations", headers=headers)
     assert first.status_code == 201
     assert second.status_code == 201
-
     use_chat(FakeChat(text_response("Respuesta uno")))
     await client.post(
         "/chat",

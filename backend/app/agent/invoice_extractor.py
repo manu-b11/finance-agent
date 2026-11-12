@@ -42,7 +42,10 @@ Responde únicamente con un objeto JSON, sin texto adicional ni bloques de códi
 
 Reglas:
 - Usa null para todo dato que no aparezca o no sea legible. Nunca inventes ni estimes valores.
-- Los montos y cantidades son números planos con punto decimal, sin símbolo de moneda ni separadores de miles.
+- Los montos están en pesos colombianos (COP). En este formato el punto separa los miles y la coma separa los centavos.
+- Interpreta los montos así antes de escribirlos: "20.500" o "$ 20.500" son 20500; "1.234.567" son 1234567; "20.500,50" son 20500.50; "20,500.50" son 20500.50. Un punto seguido de exactamente 3 dígitos es separador de miles, no decimal.
+- Escribe cada monto como número plano, sin símbolo de moneda, sin separadores de miles y usando el punto como decimal. Ejemplo: 20500 o 20500.50.
+- Las cantidades también son números planos con punto decimal.
 - unit_price es el precio de una unidad. Si solo ves el valor de la línea, ponlo en line_total y deja unit_price en null.
 - total es el valor total a pagar impreso en la factura. No lo calcules sumando ítems.
 - Si la imagen no es una factura o no se puede leer, responde {{"readable": false}}."""

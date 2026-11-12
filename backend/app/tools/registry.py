@@ -113,7 +113,10 @@ GOAL_DEADLINE_FIELD = {
 _DEFINITIONS = (
     ToolDefinition(
         name="add_transaction",
-        description="Registra un ingreso o un gasto del usuario.",
+        description=(
+            "Registra un ingreso o un gasto del usuario. Si es un gasto sin categoría, "
+            "se deduce del concepto; si no se indica fecha, se usa la fecha actual."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -156,7 +159,12 @@ _DEFINITIONS = (
     ),
     ToolDefinition(
         name="list_transactions",
-        description="Consulta movimientos del usuario, del más reciente al más antiguo, con filtros opcionales.",
+        description=(
+            "Consulta movimientos del usuario, del más reciente al más antiguo, con filtros "
+            "opcionales. Devuelve count, total (suma de los resultados) y la lista de "
+            "movimientos. Usa type 'expense' para listar los gastos cuando pregunte en qué "
+            "ha gastado."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -289,7 +297,8 @@ _DEFINITIONS = (
         name="get_expenses_by_category",
         description=(
             "Agrupa los gastos por categoría, de mayor a menor, con total y porcentaje de cada una "
-            "e indica la categoría con más gasto. Sin fechas considera todos los movimientos."
+            "e indica la categoría con más gasto. Sin fechas considera todos los movimientos. "
+            "Para enumerar gastos individuales usa list_transactions con type 'expense'."
         ),
         parameters={
             "type": "object",
@@ -300,9 +309,9 @@ _DEFINITIONS = (
     ToolDefinition(
         name="get_monthly_report",
         description=(
-            "Informe financiero mensual: ingresos, gastos, balance y distribución de gastos por "
-            "categoría. Incluye pdf_url, la ruta para descargar el informe en PDF. Sin month usa "
-            "el mes actual."
+            "Informe financiero mensual: ingresos, gastos, balance, distribución de gastos por "
+            "categoría y la lista de gastos individuales del mes. Incluye pdf_url, la ruta para "
+            "descargar el informe en PDF. Sin month usa el mes actual."
         ),
         parameters={
             "type": "object",

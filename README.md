@@ -76,7 +76,7 @@ api → agent → tools → services → PostgreSQL
 | ORM y migraciones | SQLAlchemy 2.0 async · asyncpg · Alembic |
 | Validación y configuración | Pydantic v2 · pydantic-settings |
 | Autenticación | JWT (python-jose) · hash con argon2 |
-| IA | Gemini con tool calling y visión vía REST (`agent/llm_client.py`) |
+| IA | Gemini con tool calling y visión vía REST, con respaldo Qwen (OpenRouter/Groq) y Ollama (`agent/llm_client.py`) |
 | Lectura de facturas | LLM de visión · PyMuPDF para PDF · Pillow para imágenes |
 | Informes PDF | ReportLab · matplotlib |
 | Recordatorios | APScheduler con jobstore en PostgreSQL |
@@ -128,9 +128,18 @@ cp .env.example .env
 | `JWT_ALGORITHM` | No | Algoritmo JWT. Por defecto `HS256`. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | Duración del token. Por defecto `60`. |
 | `CORS_ORIGINS` | No | Orígenes permitidos, separados por coma. |
-| `GEMINI_API_KEY` | Sí para IA | Sin ella, el chat y la extracción de facturas no funcionan. |
+| `GEMINI_API_KEY` | Sí para IA | Sin ella, el chat y la extracción de facturas no usan Gemini. |
 | `GEMINI_MODEL` | No | Modelo de Gemini. Por defecto `gemini-3.5-flash`. |
-| `LLM_TIMEOUT_SECONDS` | No | Timeout de las llamadas al LLM. |
+| `LLM_TIMEOUT_SECONDS` | No | Timeout de las llamadas a Gemini. |
+| `QWEN_API_KEY` | No | Clave del respaldo Qwen (OpenRouter o Groq). Sin ella no hay respaldo Qwen. |
+| `QWEN_BASE_URL` | No | `https://openrouter.ai/api/v1` (o `https://api.groq.com/openai/v1`). |
+| `QWEN_MODEL` | No | Modelo Qwen. Por defecto `qwen/qwen3.7-flash`. |
+| `QWEN_TIMEOUT_SECONDS` | No | Timeout del respaldo Qwen. Por defecto `90`. |
+| `OLLAMA_BASE_URL` | No | `https://ollama.com` (nube, requiere clave) o `http://localhost:11434` (local). |
+| `OLLAMA_API_KEY` | No | Clave de Ollama Cloud. El Ollama local no la necesita. |
+| `OLLAMA_MODEL` | No | Modelo de Ollama. |
+| `OLLAMA_NUM_CTX` / `OLLAMA_THINK` / `OLLAMA_KEEP_ALIVE` | No | Contexto, modo pensamiento y tiempo de vida para Ollama local. |
+| `OLLAMA_TIMEOUT_SECONDS` | No | Timeout del respaldo Ollama. Por defecto `180`. |
 | `INVOICE_MAX_BYTES` | No | Tamaño máximo de factura (10 MB por defecto). |
 | `INVOICE_MAX_PDF_PAGES` | No | Páginas máximas de un PDF. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | No | Claves para notificaciones push. |

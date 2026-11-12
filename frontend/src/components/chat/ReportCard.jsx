@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { errorMessage } from '../../api/client.js'
 import { downloadMonthlyReport } from '../../api/reports.js'
-import { categoryLabel, formatCOP, formatMonth } from '../../lib/format.js'
+import { categoryLabel, formatCOP, formatDate, formatMonth } from '../../lib/format.js'
 
 /*
   report: resultado de la tool get_monthly_report
@@ -54,6 +54,33 @@ export default function ReportCard({ report }) {
           <span style={{ color: 'var(--text)' }}>Balance</span>
           <span>{formatCOP(report.balance)}</span>
         </div>
+        {report.expenses?.length > 0 && (
+          <div className="report-expenses">
+            <div className="report-subhead">
+              <span>Gastos del mes</span>
+              <span className="expense">{formatCOP(report.total_expenses)}</span>
+            </div>
+            <div className="items tx-items">
+              {report.expenses.map((tx) => (
+                <div className="row tx-row" key={tx.id}>
+                  <span className="tx-concept">
+                    {tx.concept}
+                    <small>
+                      {formatDate(tx.occurred_on)}
+                      {tx.category ? ` · ${categoryLabel(tx.category)}` : ''}
+                    </small>
+                  </span>
+                  <span className="expense">− {formatCOP(tx.amount)}</span>
+                </div>
+              ))}
+            </div>
+            {report.expense_count > report.expenses.length && (
+              <div className="card-note">
+                Mostrando los últimos {report.expenses.length} de {report.expense_count} gastos.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="card-actions">

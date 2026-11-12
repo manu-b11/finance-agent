@@ -9,6 +9,7 @@ from app.schemas.user import UserCreate
 from app.services import auth as auth_service
 from app.services import push as push_service
 from app.tools import reminders as tools
+from tests.services.fakes import FakePushSender
 
 FUTURE = {"concept": "Pagar arriendo", "remind_on": "2030-03-05", "remind_at": "09:00"}
 UNKNOWN = "00000000-0000-0000-0000-000000000000"
@@ -31,7 +32,7 @@ async def test_create_reminder_returns_json_and_notification_status(session):
     json.dumps(result)
 
 
-async def test_notifications_enabled_reflects_push_subscriptions(session):
+async def test_notifications_enabled_reflects_push_subscriptions(session, monkeypatch):
     user = await make_user(session)
     user_id = user.id
     await push_service.subscribe(
@@ -40,8 +41,13 @@ async def test_notifications_enabled_reflects_push_subscriptions(session):
         PushSubscriptionCreate(endpoint="https://push.example/a", keys={"p256dh": "k", "auth": "a"}),
         None,
     )
+    fake = FakePushSender()
+    monkeypatch.setattr(push_service, "web_push_sender", fake)
     result = await tools.create_reminder(session, user_id, FUTURE)
     assert result["notifications_enabled"] is True
+    assert fake.calls[0][1]["title"] == "Recordatorio creado"
+    assert fake.calls[0][1]["body"] == "Pagar arriendo"
+    assert fake.calls[0][1]["url"] == "/recordatorios"
 
 
 async def test_create_exact_day_of_month_reminders(session):

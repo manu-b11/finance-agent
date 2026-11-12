@@ -1,5 +1,9 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 
 class AppError(Exception):
@@ -58,7 +62,10 @@ class ProcessingError(AppError):
 class AIUnavailableError(AppError):
     status_code = 503
     code = "ai_unavailable"
-    message = "El servicio de IA no está disponible en este momento."
+    message = (
+        "El servicio de IA no está disponible en este momento. "
+        "Inténtalo de nuevo en unos segundos."
+    )
 
 
 class RateLimitError(AppError):
@@ -68,6 +75,14 @@ class RateLimitError(AppError):
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    if exc.status_code >= 500:
+        logger.error(
+            "%s %s → %s: %s",
+            request.method,
+            request.url.path,
+            exc.code,
+            exc.message,
+        )
     return JSONResponse(
         status_code=exc.status_code,
         content={"code": exc.code, "message": exc.message},

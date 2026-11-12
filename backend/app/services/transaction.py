@@ -89,20 +89,43 @@ async def delete_transaction(
 async def list_transactions(
     session: AsyncSession, user_id: uuid.UUID, filters: TransactionFilters
 ) -> list[Transaction]:
-    query = select(Transaction).where(Transaction.user_id == user_id)
-    if filters.start_date:
-        query = query.where(Transaction.occurred_on >= filters.start_date)
-    if filters.end_date:
-        query = query.where(Transaction.occurred_on <= filters.end_date)
-    if filters.type:
-        query = query.where(Transaction.type == filters.type.value)
-    if filters.category:
-        query = query.where(Transaction.category == filters.category.value)
-    query = query.order_by(Transaction.occurred_on.desc(), Transaction.created_at.desc()).limit(
-        filters.limit
+    query = (
+        select(Transaction)
+        .where(*_filter_conditions(user_id, filters))
+        .order_by(Transaction.occurred_on.desc(), Transaction.created_at.desc())
+        .limit(filters.limit)
     )
     result = await session.execute(query)
     return list(result.scalars().all())
+
+
+def _filter_conditions(user_id: uuid.UUID, filters: TransactionFilters) -> list:
+    conditions = [Transaction.user_id == user_id]
+    if filters.start_date:
+        conditions.append(Transaction.occurred_on >= filters.start_date)
+    if filters.end_date:
+        conditions.append(Transaction.occurred_on <= filters.end_date)
+    if filters.type:
+        conditions.append(Transaction.type == filters.type.value)
+    if filters.category:
+        conditions.append(Transaction.category == filters.category.value)
+    return conditions
+
+
+async def summarize_transactions(
+    session: AsyncSession, user_id: uuid.UUID, filters: TransactionFilters
+) -> tuple[Decimal, int]:
+    """Suma y cantidad de todos los movimientos que cumplen los filtros.
+
+    No aplica `limit`: sirve para mostrar el total real del periodo aunque la
+    lista visible esté recortada.
+    """
+    query = select(
+        func.coalesce(func.sum(Transaction.amount), 0),
+        func.count(),
+    ).where(*_filter_conditions(user_id, filters))
+    total, count = (await session.execute(query)).one()
+    return Decimal(total).quantize(CENTS), int(count)
 
 
 async def get_balance(

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.jsx'
+import { useConversationList } from '../hooks/useConversationList.js'
 import { listInvoices, uploadInvoice } from '../api/invoices.js'
 import { errorMessage } from '../api/client.js'
 import { categoryLabel, formatCOP, formatDate } from '../lib/format.js'
@@ -13,6 +14,7 @@ const isDesktop = () => window.matchMedia('(min-width:1024px)').matches
 export default function Invoices() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const history = useConversationList(Boolean(user))
   const inputRef = useRef(null)
 
   const [invoices, setInvoices] = useState([])
@@ -58,7 +60,9 @@ export default function Invoices() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         onCollapse={closeSidebar}
-        onNewChat={() => navigate('/')}
+        history={history}
+        onNewChat={() => navigate('/', { state: { newChat: true } })}
+        onSelectChat={(item) => navigate('/', { state: { conversationId: item.id } })}
         onLogout={logout}
       />
 

@@ -119,6 +119,28 @@ async def create_reminder(
     return to_read(reminder)
 
 
+async def notify_created(
+    session: AsyncSession, user_id: uuid.UUID, reminder: ReminderRead
+) -> None:
+    """Avisa al dispositivo que el recordatorio quedó creado. Un fallo no rompe la creación."""
+    try:
+        summary = await push_service.send_to_user(
+            session,
+            user_id,
+            push_service.PushPayload(
+                title="Recordatorio creado",
+                body=reminder.concept,
+                tag=f"reminder-created-{reminder.id}",
+                url="/recordatorios",
+            ),
+            push_service.web_push_sender,
+        )
+        if summary.gone:
+            await session.commit()
+    except Exception:
+        logger.exception("No se pudo notificar la creación del recordatorio %s.", reminder.id)
+
+
 async def _get_active_owned(
     session: AsyncSession, user_id: uuid.UUID, reminder_id: uuid.UUID
 ) -> Reminder:

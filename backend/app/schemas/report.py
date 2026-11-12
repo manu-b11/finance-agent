@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.transaction import TransactionRead
+
 
 class MonthlyReportQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -36,3 +38,6 @@ class MonthlyReportRead(BaseModel):
     categories: list[CategoryTotal]
     top_category: str | None
     generated_on: date
+    # Lista de gastos del mes (máximo REPORT_EXPENSES_LIMIT) y cuántos hay en total.
+    expenses: list[TransactionRead] = Field(default_factory=list)
+    expense_count: int = 0

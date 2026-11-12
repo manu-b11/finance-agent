@@ -90,17 +90,21 @@ export const getConversations = (limit = 50) =>
 export const createConversation = (title) =>
   request('/chat/conversations', { method: 'POST', body: title ? { title } : undefined })
 
-// GET /chat/conversations/{id}/messages?limit=50 → [{ id, role, content, created_at }]
+// GET /chat/conversations/{id}/messages?limit=50 → [{ id, role, content, cards, created_at }]
 export const getConversationMessages = (conversationId, limit = 50) =>
   request(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages?limit=${limit}`,
   )
 
 // POST /chat/conversations/{id}/messages → guarda un intercambio ya resuelto (sin llamar a la IA)
-export const addExchange = (conversationId, { userText, assistantText }) =>
+export const addExchange = (conversationId, { userText, assistantText, cards = [] }) =>
   request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
     method: 'POST',
-    body: { user_text: userText, assistant_text: assistantText },
+    body: {
+      user_text: userText,
+      assistant_text: assistantText,
+      ...(cards.length ? { cards } : {}),
+    },
   })
 
 // GET /chat/history?limit=50 → historial global reciente (compatibilidad)

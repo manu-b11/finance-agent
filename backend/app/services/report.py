@@ -5,35 +5,23 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.categories import CATEGORY_LABELS, UNCATEGORIZED
 from app.core.clock import local_today, month_bounds
 from app.core.errors import NotFoundError
-from app.models.transaction import ExpenseCategory, Transaction, TransactionType
+from app.models.transaction import Transaction, TransactionType
 from app.schemas.report import (
     CategoryTotal,
     ExpenseBreakdownRead,
     MonthlyReportQuery,
     MonthlyReportRead,
 )
-from app.schemas.transaction import PeriodQuery
+from app.schemas.transaction import PeriodQuery, TransactionFilters, TransactionRead
 from app.services import auth as auth_service
 from app.services import report_pdf
 from app.services import transaction as transaction_service
 
 CENTS = Decimal("0.01")
-UNCATEGORIZED = "sin_categoria"
-
-CATEGORY_LABELS = {
-    ExpenseCategory.FOOD.value: "Alimentación",
-    ExpenseCategory.TRANSPORT.value: "Transporte",
-    ExpenseCategory.HOUSING.value: "Vivienda",
-    ExpenseCategory.UTILITIES.value: "Servicios",
-    ExpenseCategory.HEALTH.value: "Salud",
-    ExpenseCategory.EDUCATION.value: "Educación",
-    ExpenseCategory.ENTERTAINMENT.value: "Entretenimiento",
-    ExpenseCategory.CLOTHING.value: "Ropa",
-    ExpenseCategory.OTHER.value: "Otros",
-    UNCATEGORIZED: "Sin categoría",
-}
+REPORT_EXPENSES_LIMIT = 100
 
 
 def _period_conditions(user_id: uuid.UUID, period: PeriodQuery) -> list:
@@ -87,8 +75,37 @@ async def get_expense_breakdown(
     )
 
 
+async def _month_expenses(
+    session: AsyncSession, user_id: uuid.UUID, period: PeriodQuery
+) -> tuple[list[TransactionRead], int]:
+    """Gastos individuales del periodo (los más recientes primero) y su total."""
+    filters = TransactionFilters(
+        start_date=period.start_date,
+        end_date=period.end_date,
+        type=TransactionType.EXPENSE,
+        limit=REPORT_EXPENSES_LIMIT,
+    )
+    rows = await transaction_service.list_transactions(session, user_id, filters)
+    expenses = [TransactionRead.model_validate(row) for row in rows]
+    count = (
+        await session.execute(
+            select(func.count())
+            .select_from(Transaction)
+            .where(
+                *_period_conditions(user_id, period),
+                Transaction.type == TransactionType.EXPENSE.value,
+            )
+        )
+    ).scalar_one()
+    return expenses, count
+
+
 async def get_monthly_report(
-    session: AsyncSession, user_id: uuid.UUID, query: MonthlyReportQuery
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    query: MonthlyReportQuery,
+    *,
+    include_expenses: bool = False,
 ) -> MonthlyReportRead:
     """Ingresos, gastos, balance y distribución por categoría de un mes (RF-37)."""
     user = await auth_service.get_user_by_id(session, user_id)
@@ -108,6 +125,10 @@ async def get_monthly_report(
             select(func.count()).select_from(Transaction).where(*_period_conditions(user_id, period))
         )
     ).scalar_one()
+    expenses: list[TransactionRead] = []
+    expense_count = 0
+    if include_expenses:
+        expenses, expense_count = await _month_expenses(session, user_id, period)
     return MonthlyReportRead(
         month=f"{year:04d}-{month:02d}",
         start_date=start,
@@ -119,6 +140,8 @@ async def get_monthly_report(
         categories=categories,
         top_category=categories[0].category if categories else None,
         generated_on=today,
+        expenses=expenses,
+        expense_count=expense_count,
     )
 
 
@@ -126,6 +149,8 @@ async def generate_monthly_pdf(
     session: AsyncSession, user_id: uuid.UUID, query: MonthlyReportQuery
 ) -> tuple[MonthlyReportRead, bytes]:
     """Genera el PDF solo con datos reales de la base (RF-39, RF-40)."""
-    report = await get_monthly_report(session, user_id, query)
+    report = await get_monthly_report(
+        session, user_id, query, include_expenses=True
+    )
     content = await run_in_threadpool(report_pdf.render_monthly_report, report)
     return report, content

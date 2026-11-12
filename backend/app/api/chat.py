@@ -61,6 +61,7 @@ async def chat_demo(
             ):
                 yield _sse(event.type, event.data)
         except AppError as exc:
+            logger.error("Chat demo falló (%s): %s", exc.code, exc.message)
             yield _sse("error", {"code": exc.code, "message": exc.message})
             return
         except Exception:
@@ -102,6 +103,12 @@ async def chat(
             ):
                 yield _sse(event.type, event.data)
         except AppError as exc:
+            logger.error(
+                "Chat falló (user=%s, %s): %s",
+                current_user.id,
+                exc.code,
+                exc.message,
+            )
             yield _sse("error", {"code": exc.code, "message": exc.message})
             return
         except Exception:
@@ -181,6 +188,7 @@ async def save_exchange(
         data.user_text,
         data.assistant_text,
         conversation_id=conversation_id,
+        cards=data.cards,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

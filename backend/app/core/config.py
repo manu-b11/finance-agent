@@ -7,13 +7,21 @@ class Settings(BaseSettings):
     database_url: str
     jwt_secret: str
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 43200
     cors_origins: str = "http://localhost:5173"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     ollama_api_key: str = ""
     ollama_base_url: str = "https://ollama.com"
-    ollama_model: str = "qwen3-vl:235b"
+    ollama_model: str = "glm-5.3-flash"
+    ollama_num_ctx: int = 8192
+    ollama_think: bool = False
+    ollama_keep_alive: str = "30m"
+    ollama_timeout_seconds: float = 180.0
+    qwen_base_url: str = "https://openrouter.ai/api/v1"
+    qwen_api_key: str = ""
+    qwen_model: str = "qwen/qwen3.7-flash"
+    qwen_timeout_seconds: float = 90.0
     llm_timeout_seconds: float = 60.0
     invoice_max_bytes: int = 10 * 1024 * 1024
     invoice_max_pdf_pages: int = 5

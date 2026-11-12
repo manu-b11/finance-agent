@@ -145,3 +145,11 @@ async def test_extract_invoice_sends_images_and_no_tools():
     assert tools == []
     assert messages[0].role == "system"
     assert messages[1].images == (image,)
+
+
+def test_prompt_explains_colombian_thousands_separator():
+    prompt = invoice_extractor.build_extraction_prompt()
+    assert "20.500" in prompt and "20500" in prompt
+    assert "1.234.567" in prompt and "1234567" in prompt
+    assert "20.500,50" in prompt and "20500.50" in prompt
+    assert "separador de miles" in prompt

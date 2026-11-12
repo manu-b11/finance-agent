@@ -55,7 +55,7 @@ async def test_expenses_by_category_tool_is_json_serializable(session):
     json.dumps(result)
 
 
-async def test_monthly_report_tool_includes_pdf_path(session):
+async def test_monthly_report_tool_includes_pdf_path_and_expenses(session):
     user = await make_user(session)
     await seed(session, user.id)
     result = await reports.get_monthly_report(session, user.id, {"month": "2026-11"})
@@ -63,6 +63,8 @@ async def test_monthly_report_tool_includes_pdf_path(session):
     assert result["total_expenses"] == "500.00"
     assert result["balance"] == "2500.00"
     assert result["pdf_url"] == "/reports/monthly/2026-11/pdf"
+    assert result["expense_count"] == 2
+    assert {item["concept"] for item in result["expenses"]} == {"Mercado", "Bus"}
     json.dumps(result)
 
 

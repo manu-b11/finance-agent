@@ -118,6 +118,35 @@ async def test_monthly_report_totals_only_cover_the_month(session):
     assert report.transaction_count == 6
     assert report.top_category == "alimentacion"
     assert sum(c.total for c in report.categories) == report.total_expenses
+    # El resumen del dashboard no carga la lista de gastos.
+    assert report.expenses == []
+    assert report.expense_count == 0
+
+
+async def test_monthly_report_can_include_individual_expenses(session):
+    user = await make_user(session)
+    user_id = user.id
+    await add(session, user_id, "expense", "100", "2026-11-03", "alimentacion", concept="Mercado")
+    await add(session, user_id, "expense", "50", "2026-11-10", "belleza", concept="Corte de cabello")
+    await add(session, user_id, "expense", "999", "2026-10-31", "salud", concept="Fuera del mes")
+    await add(session, user_id, "income", "300", "2026-11-15", concept="Salario")
+
+    report = await service.get_monthly_report(
+        session, user_id, MonthlyReportQuery(month="2026-11"), include_expenses=True
+    )
+    assert report.expense_count == 2
+    assert [expense.concept for expense in report.expenses] == ["Corte de cabello", "Mercado"]
+    assert report.expenses[0].category.value == "belleza"
+    assert all(expense.type.value == "expense" for expense in report.expenses)
+
+
+def test_new_categories_have_visible_labels():
+    from app.core.categories import category_label
+
+    assert category_label("belleza") == "Belleza"
+    assert category_label("mascotas") == "Mascotas"
+    assert category_label("tecnologia") == "Tecnología"
+    assert category_label(None) == "Sin categoría"
 
 
 async def test_monthly_report_handles_february_in_leap_and_common_years(session):

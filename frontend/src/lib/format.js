@@ -38,6 +38,16 @@ const CATEGORY_LABELS = {
   educacion: 'Educación',
   entretenimiento: 'Entretenimiento',
   ropa: 'Ropa',
+  belleza: 'Belleza',
+  hogar: 'Hogar',
+  mascotas: 'Mascotas',
+  regalos: 'Regalos',
+  viajes: 'Viajes',
+  suscripciones: 'Suscripciones',
+  deporte: 'Deporte',
+  tecnologia: 'Tecnología',
+  seguros: 'Seguros',
+  impuestos: 'Impuestos',
   otros: 'Otros',
 }
 export const categoryLabel = (c) => CATEGORY_LABELS[c] ?? c ?? ''

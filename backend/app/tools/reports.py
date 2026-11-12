@@ -24,5 +24,7 @@ async def get_monthly_report(
     session: AsyncSession, user_id: uuid.UUID, raw_args: dict[str, Any]
 ) -> dict[str, Any]:
     query = MonthlyReportQuery.model_validate(raw_args)
-    report = await report_service.get_monthly_report(session, user_id, query)
+    report = await report_service.get_monthly_report(
+        session, user_id, query, include_expenses=True
+    )
     return {**report.model_dump(mode="json"), "pdf_url": pdf_path(report.month)}
